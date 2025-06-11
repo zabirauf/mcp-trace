@@ -5,7 +5,7 @@ MCP Proxy TUI - A Terminal User Interface for proxying and monitoring MCP server
 
 from textual.app import App, ComposeResult
 from textual.containers import Container, Horizontal, Vertical, ScrollableContainer
-from textual.widgets import Header, Footer, Static, ListView, ListItem, TextLog, Label, Button, Input
+from textual.widgets import Header, Footer, Static, ListView, ListItem, RichLog, Label, Button, Input
 from textual.binding import Binding
 from textual.reactive import reactive
 from datetime import datetime
@@ -140,7 +140,7 @@ class MCPProxyTUI(App):
             
         with Vertical(id="main-content"):
             yield Label("Request/Response Logs", classes="section-title")
-            yield ListView(id="log-viewer")
+            yield RichLog(id="log-viewer", highlight=True, markup=True)
             
         with Container(id="stats"):
             yield Label("Statistics", classes="section-title")
@@ -193,11 +193,18 @@ class MCPProxyTUI(App):
             f.write(json.dumps(log_data) + "\n")
         
         # Update UI
-        log_viewer = self.query_one("#log-viewer", ListView)
-        log_viewer.append(entry)
-        
-        # Auto-scroll to bottom
-        log_viewer.scroll_end(animate=False)
+        log_viewer = self.query_one("#log-viewer", RichLog)
+        # Format the log entry for RichLog
+        level_colors = {
+            "INFO": "cyan",
+            "WARNING": "yellow",
+            "ERROR": "red",
+            "DEBUG": "green",
+            "REQUEST": "blue",
+            "RESPONSE": "magenta"
+        }
+        color = level_colors.get(level, "white")
+        log_viewer.write(f"[dim]{timestamp}[/dim] [{color}]{level:8}[/{color}] {message}")
     
     def add_mcp_server(self, name: str, url: str) -> None:
         """Add an MCP server to monitor"""
@@ -243,7 +250,7 @@ class MCPProxyTUI(App):
     def action_clear_logs(self) -> None:
         """Clear all log entries"""
         self.log_entries.clear()
-        log_viewer = self.query_one("#log-viewer", ListView)
+        log_viewer = self.query_one("#log-viewer", RichLog)
         log_viewer.clear()
         self.log_info("Logs Cleared", "All log entries have been removed")
     
