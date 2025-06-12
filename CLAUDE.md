@@ -4,136 +4,308 @@ This file provides guidance to Claude Code when working with the MCP Proxy TUI p
 
 ## Project Overview
 
-This is a Terminal User Interface (TUI) application built with Python and Textual that acts as a proxy and monitor for Model Context Protocol (MCP) server traffic. It intercepts, logs, and displays all communication between MCP clients and servers in real-time.
+This is a Terminal User Interface (TUI) application built with **Rust and Ratatui** that acts as a proxy and monitor for Model Context Protocol (MCP) server traffic. It consists of two separate binaries that work together to intercept, log, and display all communication between MCP clients and servers in real-time.
 
-## Key Components
+## Architecture
 
-### Main Application (`src/main.py`)
-- **MCPProxyTUI**: The main Textual app class that manages the UI and proxy logic
-- **LogEntry**: Widget for displaying individual log entries with formatting
-- **MCPConnection**: Widget showing connection status for each MCP server
-- Uses CSS-in-Python for styling the TUI layout
+The project is structured as a **Cargo workspace** with two main components:
 
-### Architecture
+### 1. MCP Proxy (`mcp-proxy`)
+- **Purpose**: STDIO-based proxy for MCP servers
+- **Language**: Rust with tokio for async operations
+- **Functionality**: Intercepts and forwards JSON-RPC communication, sends logs to monitor
+- **Binary location**: `target/release/mcp-proxy`
+
+### 2. MCP Monitor (`mcp-monitor`) 
+- **Purpose**: TUI for monitoring multiple MCP proxies
+- **Language**: Rust with Ratatui for terminal UI
+- **Functionality**: Real-time display of logs, statistics, and proxy status
+- **Binary location**: `target/release/mcp-monitor`
+
+### 3. Shared Library (`mcp-common`)
+- **Purpose**: Common types, IPC communication, and message protocols
+- **Components**: Types, IPC (Unix sockets), JSON-RPC handling
+
 ```
-MCP Client → [Proxy Layer] → MCP Server
-                 ↓
-           [TUI Display]
+MCP Client → [mcp-proxy] → MCP Server (STDIO)
+                 ↓ (IPC)
+           [mcp-monitor TUI]
                  ↓
            [Log Storage]
 ```
 
+## Key Components
+
+### MCP Proxy Components
+- **`src/main.rs`**: CLI argument parsing and application entry point
+- **`src/proxy.rs`**: Main proxy logic and MCP server process management
+- **`src/stdio_handler.rs`**: STDIO communication handling between client and server
+
+### MCP Monitor Components  
+- **`src/main.rs`**: TUI application setup and IPC server
+- **`src/app.rs`**: Application state management and event handling
+- **`src/ui.rs`**: Ratatui interface components and layout
+
+### MCP Common Components
+- **`src/types.rs`**: Shared data structures (ProxyId, LogEntry, ProxyStats, etc.)
+- **`src/messages.rs`**: IPC message protocol definitions
+- **`src/ipc.rs`**: Unix domain socket communication
+- **`src/mcp.rs`**: JSON-RPC message parsing and handling
+
 ## Development Guidelines
 
+### Building and Running
+
+```bash
+# Build all components
+cargo build --release
+
+# Run monitor (starts IPC server)
+./target/release/mcp-monitor --verbose
+
+# Run proxy (in another terminal)
+./target/release/mcp-proxy --name "My Server" --command python server.py --verbose
+
+# Or use convenience script
+./run.sh monitor
+./run.sh proxy python server.py
+```
+
 ### Adding New Features
-1. **New UI Components**: Extend Textual widgets in `src/main.py`
-2. **Proxy Logic**: Implement in async methods within MCPProxyTUI class
-3. **Logging**: Use the structured logging methods (log_info, log_error, log_request, log_response)
+
+#### 1. New Proxy Features
+- **STDIO handling**: Modify `mcp-proxy/src/stdio_handler.rs`
+- **Process management**: Update `mcp-proxy/src/proxy.rs`
+- **New CLI options**: Add to `mcp-proxy/src/main.rs` clap Args struct
+
+#### 2. New Monitor Features
+- **UI components**: Extend widgets in `mcp-monitor/src/ui.rs`
+- **Application logic**: Update state management in `mcp-monitor/src/app.rs`
+- **Event handling**: Add new AppEvent variants and handlers
+
+#### 3. New Communication Features
+- **Message types**: Add to `mcp-common/src/messages.rs` IpcMessage enum
+- **Data structures**: Define in `mcp-common/src/types.rs`
+- **Protocol changes**: Update IPC handling in `mcp-common/src/ipc.rs`
 
 ### Code Patterns
-- Use async/await for all network operations
-- Follow Textual's reactive programming model
-- Keep UI updates in the main thread
-- Use structured logging with appropriate levels
 
-### Testing the TUI
+#### Async/Await Usage
+```rust
+// All network operations use tokio
+async fn handle_communication(&mut self) -> Result<()> {
+    tokio::select! {
+        result = self.read_stdin() => { /* handle */ }
+        result = self.read_stdout() => { /* handle */ }
+        _ = self.shutdown_rx.recv() => break,
+    }
+}
+```
+
+#### Error Handling
+```rust
+// Use anyhow for error propagation
+use anyhow::{Result, Context};
+
+async fn start_server(&self) -> Result<()> {
+    Command::new(&self.command[0])
+        .spawn()
+        .context("Failed to start MCP server")?;
+}
+```
+
+#### IPC Communication
+```rust
+// Structured message sending
+let message = IpcMessage::LogEntry(log_entry);
+ipc_client.send(message).await?;
+```
+
+### Testing and Development
+
 ```bash
-# Run in development mode with live reload
+# Check compilation
+cargo check
+
+# Run with logging
+RUST_LOG=debug ./target/release/mcp-monitor
+
+# Docker development
+./run.sh build
 docker compose up --build
 
 # View logs
-docker compose logs -f
-
-# Access the container for debugging
-docker compose exec mcp-proxy-tui bash
+./run.sh logs
 ```
 
 ## Common Tasks
 
-### Adding a New MCP Server
-```python
-self.add_mcp_server("Server Name", "http://server-url:port")
+### Adding a New Log Type
+
+1. **Add to LogLevel enum** in `mcp-common/src/types.rs`:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum LogLevel {
+    // ... existing levels
+    NewLevel,
+}
 ```
 
-### Implementing Actual Proxy Logic
-Replace the placeholder in `start_proxy_server()` with:
-1. HTTP/WebSocket server listening on proxy_port
-2. Request interception and forwarding
-3. Response capture and forwarding
-4. Error handling and retry logic
+2. **Update UI colors** in `mcp-monitor/src/ui.rs`:
+```rust
+let level_color = match log.level {
+    // ... existing colors
+    LogLevel::NewLevel => Color::Purple,
+};
+```
 
-### Adding New Log Types
-1. Create new log method in MCPProxyTUI class
-2. Define color in LogEntry.compose() level_colors dict
-3. Update stats tracking if needed
+3. **Add logging method** in `mcp-proxy/src/stdio_handler.rs`:
+```rust
+async fn log_new_level(&mut self, content: &str) {
+    let log_entry = LogEntry::new(
+        LogLevel::NewLevel,
+        content.to_string(),
+        self.proxy_id.clone(),
+    );
+    // Send to monitor...
+}
+```
 
-## UI Layout
+### Adding New IPC Messages
 
-The TUI is divided into three main sections:
-- **Sidebar** (left): MCP server list and controls
-- **Main Content** (center): Log viewer with scrolling
-- **Stats Bar** (bottom): Real-time statistics
+1. **Define message** in `mcp-common/src/messages.rs`:
+```rust
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum IpcMessage {
+    // ... existing messages
+    NewMessage { data: String },
+}
+```
 
-## Keyboard Bindings
+2. **Handle in monitor** in `mcp-monitor/src/app.rs`:
+```rust
+pub enum AppEvent {
+    // ... existing events  
+    NewEvent(String),
+}
 
-Current bindings defined in BINDINGS:
+// In handle_event:
+AppEvent::NewEvent(data) => {
+    // Handle new event
+}
+```
+
+### Adding New CLI Options
+
+1. **Proxy options** in `mcp-proxy/src/main.rs`:
+```rust
+#[derive(Parser)]
+pub struct Args {
+    // ... existing args
+    #[arg(long)]
+    pub new_option: String,
+}
+```
+
+2. **Monitor options** in `mcp-monitor/src/main.rs`:
+```rust
+#[derive(Parser)]  
+pub struct Args {
+    // ... existing args
+    #[arg(long)]
+    pub new_flag: bool,
+}
+```
+
+## UI Layout and Controls
+
+### TUI Layout
+- **Left panel** (30 units): Proxy list with status indicators
+- **Right panel** (main): Log viewer with scrolling
+- **Bottom panel** (3 lines): Help text and keyboard shortcuts
+- **Bottom of left panel** (8 lines): Statistics dashboard
+
+### Keyboard Bindings
+
+Current bindings in `mcp-monitor/src/main.rs`:
 - `q`: Quit application
-- `c`: Clear logs
+- `c`: Clear logs  
 - `r`: Refresh connections
-- `a`: Add new server
-- `d`: Toggle dark mode
+- `↑/↓`: Scroll through logs
+- `PgUp/PgDn`: Page up/down through logs
+- `Home/End`: Jump to top/bottom of logs
 
 To add new bindings:
-1. Add to BINDINGS list
-2. Implement `action_<name>` method
+1. Handle in `run_app` key match statement
+2. Implement corresponding method in `App`
 
 ## Dependencies
 
-Key libraries:
-- **textual**: TUI framework
-- **rich**: Terminal formatting
-- **structlog**: Structured logging
-- **aiohttp/httpx**: HTTP client/server
-- **websockets**: WebSocket support
-- **mcp**: Model Context Protocol library
+### Rust Crates
+- **tokio**: Async runtime and networking
+- **ratatui**: Terminal user interface framework
+- **crossterm**: Cross-platform terminal manipulation
+- **serde/serde_json**: Serialization
+- **clap**: Command-line argument parsing
+- **tracing**: Structured logging
+- **anyhow/thiserror**: Error handling
+- **uuid**: Unique identifiers
+- **chrono**: Date/time handling
 
 ## Performance Considerations
 
-- Log entries are appended to both UI and disk
-- Consider implementing log rotation for long-running sessions
-- Use pagination or virtualization for large log volumes
-- Implement connection pooling for multiple MCP servers
-
-## Future Implementation Notes
-
-### WebSocket Support
-```python
-async def handle_websocket(self, ws, path):
-    # Implement bidirectional WebSocket proxy
-    pass
-```
-
-### Request Filtering
-```python
-def filter_requests(self, pattern: str):
-    # Implement log filtering logic
-    pass
-```
-
-### SSL/TLS Support
-- Add certificate handling in docker-compose.yml
-- Implement SSL context in proxy server
-
-## Debugging Tips
-
-1. Check `/app/logs/mcp_proxy.log` for persisted logs
-2. Use `structlog` configuration for detailed debugging
-3. Enable Textual dev tools with `--dev` flag
-4. Monitor Docker logs for startup issues
+- **Log management**: Limits to 10,000 entries, auto-scrolling
+- **Memory usage**: Structured data with efficient serialization
+- **IPC overhead**: Line-delimited JSON over Unix sockets
+- **Async operations**: Non-blocking I/O throughout
+- **Stats updates**: 1-second intervals to avoid overwhelming the UI
 
 ## Container Configuration
 
-- Runs with TTY enabled for proper TUI rendering
-- Network mode is 'host' for easy MCP server access
-- Volume mounts for live code updates and log persistence
-- Environment variables for terminal colors
+### Multi-stage Docker Build
+- **Builder stage**: Rust compilation with all dependencies
+- **Runtime stage**: Minimal Debian with just the binaries
+- **User management**: Non-root app user for security
+- **Volume mounts**: Logs and socket directories
+
+### Docker Compose
+- **mcp-monitor**: TUI service with TTY enabled
+- **mcp-proxy-example**: Example proxy configuration
+- **Networking**: Bridge network for inter-service communication
+- **Environment**: RUST_LOG and terminal color support
+
+## Debugging Tips
+
+1. **Compilation issues**: Run `cargo check` for quick feedback
+2. **Runtime logs**: Use `RUST_LOG=debug` for detailed tracing
+3. **IPC issues**: Check `/tmp/mcp-sockets` permissions
+4. **TUI problems**: Ensure `TERM=xterm-256color` is set
+5. **Process issues**: Monitor `docker compose logs -f`
+6. **Build issues**: Use `./run.sh build` for clean Docker builds
+
+## Future Enhancement Areas
+
+### WebSocket Support
+- Add WebSocket proxy capability alongside STDIO
+- Implement bidirectional message forwarding
+- Add WebSocket-specific logging and statistics
+
+### Advanced Filtering
+- Implement log filtering by proxy, level, or content
+- Add search functionality in the TUI
+- Support regex patterns for log filtering
+
+### Configuration Management
+- Add configuration file support (TOML/YAML)
+- Implement proxy profiles and saved configurations
+- Add environment-based configuration
+
+### Enhanced Statistics
+- Add historical statistics tracking
+- Implement performance metrics (latency, throughput)
+- Add statistics export functionality
+
+### Testing Infrastructure
+- Add unit tests for core functionality
+- Implement integration tests with mock MCP servers
+- Add property-based testing for IPC protocol

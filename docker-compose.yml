@@ -1,17 +1,42 @@
 version: '3.8'
 
 services:
-  mcp-proxy-tui:
+  mcp-monitor:
     build: .
-    container_name: mcp-proxy-tui
-    volumes:
-      - ./src:/app/src
-      - ./logs:/app/logs
-      - /var/run/docker.sock:/var/run/docker.sock:ro  # For Docker access if needed
-    environment:
-      - PYTHONUNBUFFERED=1
-      - TERM=xterm-256color
+    command: mcp-monitor --verbose
+    container_name: mcp-monitor
     stdin_open: true
     tty: true
-    network_mode: host  # For easy access to MCP servers
-    restart: unless-stopped
+    environment:
+      - RUST_LOG=debug
+      - TERM=xterm-256color
+    volumes:
+      - ./logs:/app/logs
+      - /tmp/mcp-sockets:/tmp/mcp-sockets
+    networks:
+      - mcp-network
+
+  # Example proxy service - users can add more of these
+  mcp-proxy-example:
+    build: .
+    command: mcp-proxy --name "Example Server" --command "echo" "Hello from MCP server" --verbose
+    container_name: mcp-proxy-example
+    stdin_open: true
+    tty: true
+    environment:
+      - RUST_LOG=debug
+    volumes:
+      - ./logs:/app/logs
+      - /tmp/mcp-sockets:/tmp/mcp-sockets
+    networks:
+      - mcp-network
+    depends_on:
+      - mcp-monitor
+
+networks:
+  mcp-network:
+    driver: bridge
+
+volumes:
+  mcp-logs:
+  mcp-sockets:
