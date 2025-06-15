@@ -19,9 +19,9 @@ use proxy::MCPProxy;
 #[command(name = "mcp-proxy")]
 #[command(about = "STDIO-based MCP proxy server")]
 pub struct Args {
-    /// MCP server command to proxy
+    /// MCP server command to proxy (as a single string, will be executed via shell)
     #[arg(short, long)]
-    pub command: Vec<String>,
+    pub command: String,
     
     /// Name for this proxy instance
     #[arg(short, long, default_value = "mcp-proxy")]
@@ -34,6 +34,14 @@ pub struct Args {
     /// Verbose logging
     #[arg(short, long)]
     pub verbose: bool,
+    
+    /// Use shell to execute command (enabled by default)
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
+    pub shell: bool,
+    
+    /// Skip connecting to monitor (standalone mode)
+    #[arg(long, default_value_t = false)]
+    pub no_monitor: bool,
 }
 
 #[tokio::main]
@@ -47,7 +55,7 @@ async fn main() -> Result<()> {
         .init();
 
     info!("Starting MCP Proxy: {}", args.name);
-    info!("Target command: {:?}", args.command);
+    info!("Target command: {}", args.command);
     
     if args.command.is_empty() {
         return Err(anyhow::anyhow!("No command specified. Use --command to specify the MCP server command."));
@@ -55,10 +63,11 @@ async fn main() -> Result<()> {
 
     // Create proxy instance
     let proxy_id = ProxyId::new();
-    let mut proxy = MCPProxy::new(proxy_id.clone(), args.name.clone(), args.command.clone()).await?;
+    let mut proxy = MCPProxy::new(proxy_id.clone(), args.name.clone(), args.command.clone(), args.shell).await?;
     
     // Start the proxy
-    proxy.start(&args.ipc_socket).await?;
+    let ipc_socket = if args.no_monitor { None } else { Some(args.ipc_socket.as_str()) };
+    proxy.start(ipc_socket).await?;
     
     Ok(())
 }

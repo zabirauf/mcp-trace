@@ -9,21 +9,22 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, mpsc, Mutex};
 use tokio::time::{interval, Duration};
-use tracing::{debug, error, info, warn};
+use tracing::{debug, info, warn};
 
 use crate::stdio_handler::StdioHandler;
 
 pub struct MCPProxy {
     id: ProxyId,
     name: String,
-    command: Vec<String>,
+    command: String,
+    use_shell: bool,
     stats: Arc<Mutex<ProxyStats>>,
     start_time: Instant,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
 impl MCPProxy {
-    pub async fn new(id: ProxyId, name: String, command: Vec<String>) -> Result<Self> {
+    pub async fn new(id: ProxyId, name: String, command: String, use_shell: bool) -> Result<Self> {
         let mut stats = ProxyStats::default();
         stats.proxy_id = id.clone();
         
@@ -31,13 +32,14 @@ impl MCPProxy {
             id,
             name,
             command,
+            use_shell,
             stats: Arc::new(Mutex::new(stats)),
             start_time: Instant::now(),
             shutdown_tx: None,
         })
     }
 
-    pub async fn start(&mut self, ipc_socket_path: &str) -> Result<()> {
+    pub async fn start(&mut self, ipc_socket_path: Option<&str>) -> Result<()> {
         info!("Starting MCP proxy: {}", self.name);
         
         // Create shutdown channel
@@ -45,15 +47,20 @@ impl MCPProxy {
         self.shutdown_tx = Some(shutdown_tx);
 
         // Connect to monitor (optional)
-        let mut ipc_client = match IpcClient::connect(ipc_socket_path).await {
-            Ok(client) => {
-                info!("Connected to monitor at {}", ipc_socket_path);
-                Some(client)
+        let mut ipc_client = if let Some(socket_path) = ipc_socket_path {
+            match IpcClient::connect(socket_path).await {
+                Ok(client) => {
+                    info!("Connected to monitor at {}", socket_path);
+                    Some(client)
+                }
+                Err(_) => {
+                    debug!("Monitor not available. Running in standalone mode.");
+                    None
+                }
             }
-            Err(e) => {
-                warn!("Failed to connect to monitor: {}. Running without monitoring.", e);
-                None
-            }
+        } else {
+            info!("Running in standalone mode (monitor disabled)");
+            None
         };
 
         // Send proxy started message
@@ -62,7 +69,7 @@ impl MCPProxy {
                 id: self.id.clone(),
                 name: self.name.clone(),
                 listen_address: "stdio".to_string(),
-                target_command: self.command.clone(),
+                target_command: vec![self.command.clone()],
                 status: ProxyStatus::Starting,
                 stats: self.stats.lock().await.clone(),
             };
@@ -112,18 +119,34 @@ impl MCPProxy {
             return Err(anyhow::anyhow!("No command specified"));
         }
 
-        let mut cmd = Command::new(&self.command[0]);
-        if self.command.len() > 1 {
-            cmd.args(&self.command[1..]);
-        }
+        let child = if self.use_shell {
+            // Use shell to execute the command
+            Command::new("sh")
+                .arg("-c")
+                .arg(&self.command)
+                .stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?
+        } else {
+            // Parse command and arguments
+            let parts: Vec<&str> = self.command.split_whitespace().collect();
+            if parts.is_empty() {
+                return Err(anyhow::anyhow!("Empty command"));
+            }
+            
+            let mut cmd = Command::new(parts[0]);
+            if parts.len() > 1 {
+                cmd.args(&parts[1..]);
+            }
+            
+            cmd.stdin(Stdio::piped())
+                .stdout(Stdio::piped())
+                .stderr(Stdio::piped())
+                .spawn()?
+        };
 
-        let child = cmd
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-
-        info!("Started MCP server process: {:?}", self.command);
+        info!("Started MCP server process: {}", self.command);
         Ok(child)
     }
 
