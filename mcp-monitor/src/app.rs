@@ -9,6 +9,14 @@ pub enum AppEvent {
     StatsUpdate(ProxyStats),
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TabType {
+    All,
+    Messages,  // Request + Response only
+    Errors,    // Error + Warning
+    System,    // Info + Debug + connection/disconnection logs
+}
+
 pub struct App {
     pub proxies: HashMap<ProxyId, ProxyInfo>,
     pub logs: Vec<LogEntry>,
@@ -16,10 +24,18 @@ pub struct App {
     pub selected_proxy: Option<ProxyId>,
     pub show_stats: bool,
     pub filter_level: Option<LogLevel>,
+    pub active_tab: TabType,
+    pub tab_scroll_offsets: HashMap<TabType, usize>,
 }
 
 impl App {
     pub fn new() -> Self {
+        let mut tab_scroll_offsets = HashMap::new();
+        tab_scroll_offsets.insert(TabType::All, 0);
+        tab_scroll_offsets.insert(TabType::Messages, 0);
+        tab_scroll_offsets.insert(TabType::Errors, 0);
+        tab_scroll_offsets.insert(TabType::System, 0);
+        
         Self {
             proxies: HashMap::new(),
             logs: Vec::new(),
@@ -27,6 +43,8 @@ impl App {
             selected_proxy: None,
             show_stats: true,
             filter_level: None,
+            active_tab: TabType::Messages,  // Default to Messages tab
+            tab_scroll_offsets,
         }
     }
 
@@ -42,19 +60,7 @@ impl App {
                 }
             }
             AppEvent::NewLogEntry(entry) => {
-                // Apply filters
-                if let Some(ref filter_level) = self.filter_level {
-                    if !self.matches_filter_level(&entry.level, filter_level) {
-                        return;
-                    }
-                }
-
-                if let Some(ref selected_proxy) = self.selected_proxy {
-                    if &entry.proxy_id != selected_proxy {
-                        return;
-                    }
-                }
-
+                // Store all logs without filtering
                 self.logs.push(entry);
                 
                 // Limit log size
@@ -63,8 +69,9 @@ impl App {
                     self.logs.drain(0..self.logs.len() - MAX_LOGS);
                 }
 
-                // Auto-scroll to bottom if we're already at the bottom
-                if self.scroll_offset + 20 >= self.logs.len() {
+                // Auto-scroll to bottom if we're already at the bottom for the current tab
+                let filtered_logs = self.get_filtered_logs();
+                if self.scroll_offset + 20 >= filtered_logs.len() {
                     self.scroll_to_bottom();
                 }
             }
@@ -101,34 +108,43 @@ impl App {
     pub fn scroll_up(&mut self) {
         if self.scroll_offset > 0 {
             self.scroll_offset -= 1;
+            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
         }
     }
 
     pub fn scroll_down(&mut self) {
-        if self.scroll_offset + 1 < self.logs.len() {
+        let filtered_count = self.get_filtered_logs().len();
+        if self.scroll_offset + 1 < filtered_count {
             self.scroll_offset += 1;
+            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
         }
     }
 
     pub fn page_up(&mut self) {
         self.scroll_offset = self.scroll_offset.saturating_sub(10);
+        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
     }
 
     pub fn page_down(&mut self) {
-        if self.scroll_offset + 10 < self.logs.len() {
+        let filtered_count = self.get_filtered_logs().len();
+        if self.scroll_offset + 10 < filtered_count {
             self.scroll_offset += 10;
         } else {
             self.scroll_to_bottom();
         }
+        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
     }
 
     pub fn scroll_to_top(&mut self) {
         self.scroll_offset = 0;
+        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        if !self.logs.is_empty() {
-            self.scroll_offset = self.logs.len().saturating_sub(1);
+        let filtered_logs = self.get_filtered_logs();
+        if !filtered_logs.is_empty() {
+            self.scroll_offset = filtered_logs.len().saturating_sub(1);
+            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
         }
     }
 
@@ -136,10 +152,86 @@ impl App {
         // Called periodically for any time-based updates
     }
 
-    pub fn get_visible_logs(&self, height: usize) -> &[LogEntry] {
+    pub fn get_visible_logs(&self, height: usize) -> Vec<&LogEntry> {
+        let filtered_logs = self.get_filtered_logs();
         let start = self.scroll_offset;
-        let end = (start + height).min(self.logs.len());
-        &self.logs[start..end]
+        let end = (start + height).min(filtered_logs.len());
+        filtered_logs[start..end].to_vec()
+    }
+    
+    pub fn get_filtered_logs(&self) -> Vec<&LogEntry> {
+        self.logs.iter().filter(|log| {
+            // First apply proxy filter if any
+            if let Some(ref selected_proxy) = self.selected_proxy {
+                if &log.proxy_id != selected_proxy {
+                    return false;
+                }
+            }
+            
+            // Then apply tab filter
+            match self.active_tab {
+                TabType::All => true,
+                TabType::Messages => matches!(log.level, LogLevel::Request | LogLevel::Response),
+                TabType::Errors => matches!(log.level, LogLevel::Error | LogLevel::Warning),
+                TabType::System => matches!(log.level, LogLevel::Info | LogLevel::Debug),
+            }
+        }).collect()
+    }
+    
+    pub fn switch_tab(&mut self, tab: TabType) {
+        // Save current scroll position
+        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        
+        // Switch to new tab
+        self.active_tab = tab;
+        
+        // Restore scroll position for new tab
+        self.scroll_offset = *self.tab_scroll_offsets.get(&tab).unwrap_or(&0);
+        
+        // Ensure scroll offset is valid for the filtered logs
+        let filtered_count = self.get_filtered_logs().len();
+        if self.scroll_offset >= filtered_count {
+            self.scroll_offset = filtered_count.saturating_sub(1);
+        }
+    }
+    
+    pub fn next_tab(&mut self) {
+        let next_tab = match self.active_tab {
+            TabType::All => TabType::Messages,
+            TabType::Messages => TabType::Errors,
+            TabType::Errors => TabType::System,
+            TabType::System => TabType::All,
+        };
+        self.switch_tab(next_tab);
+    }
+    
+    pub fn prev_tab(&mut self) {
+        let prev_tab = match self.active_tab {
+            TabType::All => TabType::System,
+            TabType::Messages => TabType::All,
+            TabType::Errors => TabType::Messages,
+            TabType::System => TabType::Errors,
+        };
+        self.switch_tab(prev_tab);
+    }
+    
+    pub fn get_tab_log_count(&self, tab: TabType) -> usize {
+        self.logs.iter().filter(|log| {
+            // Apply proxy filter if any
+            if let Some(ref selected_proxy) = self.selected_proxy {
+                if &log.proxy_id != selected_proxy {
+                    return false;
+                }
+            }
+            
+            // Apply tab filter
+            match tab {
+                TabType::All => true,
+                TabType::Messages => matches!(log.level, LogLevel::Request | LogLevel::Response),
+                TabType::Errors => matches!(log.level, LogLevel::Error | LogLevel::Warning),
+                TabType::System => matches!(log.level, LogLevel::Info | LogLevel::Debug),
+            }
+        }).count()
     }
 
     pub fn get_proxy_list(&self) -> Vec<&ProxyInfo> {

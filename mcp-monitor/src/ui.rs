@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{block::Title, *},
 };
 
-use crate::app::App;
+use crate::app::{App, TabType};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.size();
@@ -22,10 +22,10 @@ pub fn draw(f: &mut Frame, app: &mut App) {
         .constraints([Constraint::Min(0), Constraint::Length(8)])
         .split(chunks[0]);
 
-    // Right panel: Logs
+    // Right panel: Tabs, Logs, Help
     let right_chunks = Layout::default()
         .direction(Direction::Vertical)
-        .constraints([Constraint::Min(0), Constraint::Length(3)])
+        .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
         .split(chunks[1]);
 
     // Draw proxy list
@@ -34,11 +34,14 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     // Draw stats
     draw_stats(f, app, left_chunks[1]);
     
+    // Draw tabs
+    draw_tabs(f, app, right_chunks[0]);
+    
     // Draw logs
-    draw_logs(f, app, right_chunks[0]);
+    draw_logs(f, app, right_chunks[1]);
     
     // Draw help
-    draw_help(f, right_chunks[1]);
+    draw_help(f, right_chunks[2]);
 }
 
 fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
@@ -105,6 +108,61 @@ fn draw_stats(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(paragraph, area);
 }
 
+fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
+    let tabs: Vec<Line> = vec![
+        TabType::All,
+        TabType::Messages,
+        TabType::Errors,
+        TabType::System,
+    ]
+    .iter()
+    .map(|&tab| {
+        let tab_name = match tab {
+            TabType::All => "All",
+            TabType::Messages => "Messages",
+            TabType::Errors => "Errors",
+            TabType::System => "System",
+        };
+        
+        let count = app.get_tab_log_count(tab);
+        let tab_text = format!("{} ({})", tab_name, count);
+        
+        if tab == app.active_tab {
+            Line::from(Span::styled(
+                format!(" {} ", tab_text),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::White)
+                    .add_modifier(Modifier::BOLD)
+            ))
+        } else {
+            Line::from(Span::styled(
+                format!(" {} ", tab_text),
+                Style::default().fg(Color::Gray)
+            ))
+        }
+    })
+    .collect();
+
+    let tabs_widget = Tabs::new(tabs)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Filters")
+                .border_set(border::ROUNDED),
+        )
+        .style(Style::default())
+        .highlight_style(Style::default().fg(Color::White))
+        .select(match app.active_tab {
+            TabType::All => 0,
+            TabType::Messages => 1,
+            TabType::Errors => 2,
+            TabType::System => 3,
+        });
+
+    f.render_widget(tabs_widget, area);
+}
+
 fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
     let visible_logs = app.get_visible_logs(area.height as usize);
     
@@ -156,12 +214,15 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
         })
         .collect();
 
+    let filtered_count = app.get_filtered_logs().len();
+    let scroll_position = if filtered_count > 0 { app.scroll_offset + 1 } else { 0 };
+    
     let logs_list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(Title::from("Logs").alignment(Alignment::Center))
-                .title(Title::from(format!("({}/{})", app.scroll_offset + 1, app.logs.len())).alignment(Alignment::Right).position(block::Position::Bottom))
+                .title(Title::from(format!("({}/{})", scroll_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
         );
 
@@ -171,6 +232,7 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from("q: Quit | c: Clear logs | r: Refresh | ↑↓: Scroll | PgUp/PgDn: Page | Home/End: Top/Bottom"),
+        Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection"),
     ];
 
     let paragraph = Paragraph::new(help_text)

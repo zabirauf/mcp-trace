@@ -16,7 +16,7 @@ use tracing::{debug, error, info, warn};
 mod app;
 mod ui;
 
-use app::{App, AppEvent};
+use app::{App, AppEvent, TabType};
 
 #[derive(Parser)]
 #[command(name = "mcp-monitor")]
@@ -165,6 +165,12 @@ async fn run_app<B: Backend>(
                         KeyCode::PageDown => app.page_down(),
                         KeyCode::Home => app.scroll_to_top(),
                         KeyCode::End => app.scroll_to_bottom(),
+                        KeyCode::Tab => app.next_tab(),
+                        KeyCode::BackTab => app.prev_tab(),
+                        KeyCode::Char('1') => app.switch_tab(TabType::All),
+                        KeyCode::Char('2') => app.switch_tab(TabType::Messages),
+                        KeyCode::Char('3') => app.switch_tab(TabType::Errors),
+                        KeyCode::Char('4') => app.switch_tab(TabType::System),
                         _ => {}
                     }
                 }
