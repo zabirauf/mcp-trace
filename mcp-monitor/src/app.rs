@@ -26,6 +26,9 @@ pub struct App {
     pub filter_level: Option<LogLevel>,
     pub active_tab: TabType,
     pub tab_scroll_offsets: HashMap<TabType, usize>,
+    pub selected_log_index: Option<usize>,
+    pub show_detail_view: bool,
+    pub detail_word_wrap: bool,
 }
 
 impl App {
@@ -45,6 +48,9 @@ impl App {
             filter_level: None,
             active_tab: TabType::Messages,  // Default to Messages tab
             tab_scroll_offsets,
+            selected_log_index: None,
+            show_detail_view: false,
+            detail_word_wrap: true,
         }
     }
 
@@ -252,5 +258,67 @@ impl App {
         }
         
         total
+    }
+    
+    // Log selection methods
+    pub fn select_log_at_cursor(&mut self) {
+        let filtered_logs = self.get_filtered_logs();
+        if !filtered_logs.is_empty() && self.scroll_offset < filtered_logs.len() {
+            // Find the index of the selected log in the full logs vector
+            let selected_log = filtered_logs[self.scroll_offset];
+            if let Some(index) = self.logs.iter().position(|log| std::ptr::eq(log, selected_log)) {
+                self.selected_log_index = Some(index);
+            }
+        }
+    }
+    
+    pub fn show_selected_log_detail(&mut self) {
+        if let Some(index) = self.selected_log_index {
+            if index < self.logs.len() {
+                let log = &self.logs[index];
+                // Only show detail for Request/Response logs that have meaningful content
+                if matches!(log.level, LogLevel::Request | LogLevel::Response) {
+                    self.show_detail_view = true;
+                }
+            }
+        }
+    }
+    
+    pub fn hide_detail_view(&mut self) {
+        self.show_detail_view = false;
+        self.selected_log_index = None;
+    }
+    
+    pub fn toggle_word_wrap(&mut self) {
+        self.detail_word_wrap = !self.detail_word_wrap;
+    }
+    
+    pub fn get_selected_log(&self) -> Option<&LogEntry> {
+        if let Some(index) = self.selected_log_index {
+            self.logs.get(index)
+        } else {
+            None
+        }
+    }
+    
+    pub fn format_log_content(&self, log: &LogEntry) -> String {
+        // Try to format metadata as pretty JSON if available
+        if let Some(ref metadata) = log.metadata {
+            match serde_json::to_string_pretty(metadata) {
+                Ok(formatted) => return formatted,
+                Err(_) => {},
+            }
+        }
+        
+        // Try to parse the message as JSON and format it
+        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&log.message) {
+            match serde_json::to_string_pretty(&json_value) {
+                Ok(formatted) => return formatted,
+                Err(_) => {},
+            }
+        }
+        
+        // Fallback to the raw message
+        log.message.clone()
     }
 }

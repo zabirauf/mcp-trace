@@ -42,6 +42,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     
     // Draw help
     draw_help(f, right_chunks[2]);
+    
+    // Draw detail view overlay if active
+    if app.show_detail_view {
+        draw_detail_view(f, app, size);
+    }
 }
 
 fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
@@ -222,17 +227,22 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title(Title::from("Logs").alignment(Alignment::Center))
-                .title(Title::from(format!("({}/{})", scroll_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
+                .title(Title::from(format!("({}/{}) [Enter: View Details]", scroll_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
-        );
+        )
+        .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
+        .highlight_symbol(">");
 
-    f.render_widget(logs_list, area);
+    let mut state = ListState::default();
+    state.select(Some(0)); // Always highlight the current line
+    
+    f.render_stateful_widget(logs_list, area, &mut state);
 }
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ↑↓: Scroll | PgUp/PgDn: Page | Home/End: Top/Bottom"),
-        Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection"),
+        Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection | Enter: View log details"),
     ];
 
     let paragraph = Paragraph::new(help_text)
@@ -263,4 +273,105 @@ fn format_bytes(bytes: u64) -> String {
     } else {
         format!("{:.1} {}", size, UNITS[unit_index])
     }
+}
+
+fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
+    // Create a centered popup that covers most of the screen
+    let popup_area = centered_rect(90, 85, area);
+    
+    // Clear the background
+    let clear = Clear;
+    f.render_widget(clear, popup_area);
+    
+    if let Some(log) = app.get_selected_log() {
+        let content = app.format_log_content(log);
+        
+        // Create the main content area
+        let chunks = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
+            .split(popup_area);
+        
+        // Header with log info
+        let header_text = vec![
+            Line::from(format!("Log Details - {} | {} | {}", 
+                match log.level {
+                    mcp_common::LogLevel::Request => "📤 Request",
+                    mcp_common::LogLevel::Response => "📥 Response", 
+                    mcp_common::LogLevel::Error => "❌ Error",
+                    mcp_common::LogLevel::Warning => "⚠️ Warning",
+                    mcp_common::LogLevel::Info => "ℹ️ Info",
+                    mcp_common::LogLevel::Debug => "🐛 Debug",
+                },
+                log.timestamp.format("%H:%M:%S%.3f"),
+                log.request_id.as_deref().unwrap_or("N/A")
+            ))
+        ];
+        
+        let header = Paragraph::new(header_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Detail View")
+                    .border_set(border::ROUNDED),
+            )
+            .style(Style::default().fg(Color::White))
+            .alignment(Alignment::Center);
+        
+        // Content area with word wrap toggle
+        let wrap_indicator = if app.detail_word_wrap { "ON" } else { "OFF" };
+        let content_paragraph = Paragraph::new(content)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title(format!("Content [Word Wrap: {}]", wrap_indicator))
+                    .border_set(border::ROUNDED),
+            )
+            .style(Style::default().fg(Color::White))
+            .wrap(if app.detail_word_wrap { 
+                Wrap { trim: true } 
+            } else { 
+                Wrap { trim: false } 
+            });
+        
+        // Footer with controls
+        let footer_text = vec![
+            Line::from("ESC: Close | W: Toggle Word Wrap | ↑↓: Scroll")
+        ];
+        
+        let footer = Paragraph::new(footer_text)
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Controls")
+                    .border_set(border::ROUNDED),
+            )
+            .style(Style::default().fg(Color::Gray))
+            .alignment(Alignment::Center);
+        
+        f.render_widget(header, chunks[0]);
+        f.render_widget(content_paragraph, chunks[1]);
+        f.render_widget(footer, chunks[2]);
+    }
+}
+
+// Helper function to create a centered rectangle
+fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
+    let popup_layout = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(r);
+
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(popup_layout[1])[1]
 }

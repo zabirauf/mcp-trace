@@ -142,24 +142,38 @@ async fn run_app<B: Backend>(
         if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    match key.code {
-                        KeyCode::Char('q') => break,
-                        KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
-                        KeyCode::Char('c') => app.clear_logs(),
-                        KeyCode::Char('r') => app.refresh(),
-                        KeyCode::Up => app.scroll_up(),
-                        KeyCode::Down => app.scroll_down(),
-                        KeyCode::PageUp => app.page_up(),
-                        KeyCode::PageDown => app.page_down(),
-                        KeyCode::Home => app.scroll_to_top(),
-                        KeyCode::End => app.scroll_to_bottom(),
-                        KeyCode::Tab => app.next_tab(),
-                        KeyCode::BackTab => app.prev_tab(),
-                        KeyCode::Char('1') => app.switch_tab(TabType::All),
-                        KeyCode::Char('2') => app.switch_tab(TabType::Messages),
-                        KeyCode::Char('3') => app.switch_tab(TabType::Errors),
-                        KeyCode::Char('4') => app.switch_tab(TabType::System),
-                        _ => {}
+                    if app.show_detail_view {
+                        // Handle detail view keyboard events
+                        match key.code {
+                            KeyCode::Esc => app.hide_detail_view(),
+                            KeyCode::Char('w') | KeyCode::Char('W') => app.toggle_word_wrap(),
+                            _ => {}
+                        }
+                    } else {
+                        // Handle main view keyboard events
+                        match key.code {
+                            KeyCode::Char('q') => break,
+                            KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
+                            KeyCode::Char('c') => app.clear_logs(),
+                            KeyCode::Char('r') => app.refresh(),
+                            KeyCode::Up => app.scroll_up(),
+                            KeyCode::Down => app.scroll_down(),
+                            KeyCode::PageUp => app.page_up(),
+                            KeyCode::PageDown => app.page_down(),
+                            KeyCode::Home => app.scroll_to_top(),
+                            KeyCode::End => app.scroll_to_bottom(),
+                            KeyCode::Tab => app.next_tab(),
+                            KeyCode::BackTab => app.prev_tab(),
+                            KeyCode::Char('1') => app.switch_tab(TabType::All),
+                            KeyCode::Char('2') => app.switch_tab(TabType::Messages),
+                            KeyCode::Char('3') => app.switch_tab(TabType::Errors),
+                            KeyCode::Char('4') => app.switch_tab(TabType::System),
+                            KeyCode::Enter => {
+                                app.select_log_at_cursor();
+                                app.show_selected_log_detail();
+                            },
+                            _ => {}
+                        }
                     }
                 }
             }
