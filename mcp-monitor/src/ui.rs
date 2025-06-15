@@ -231,7 +231,7 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
-        Line::from("q: Quit | c: Clear logs | r: Refresh | ↑↓: Scroll | PgUp/PgDn: Page | Home/End: Top/Bottom"),
+        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ↑↓: Scroll | PgUp/PgDn: Page | Home/End: Top/Bottom"),
         Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection"),
     ];
 
