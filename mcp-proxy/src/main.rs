@@ -1,19 +1,6 @@
 use anyhow::Result;
 use clap::Parser;
-use mcp_common::{IpcClient, IpcMessage, LogEntry, LogLevel, ProxyId, ProxyInfo, ProxyStats, ProxyStatus};
-use std::process::Stdio;
-use std::sync::Arc;
-use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
-use tokio::process::{Child, Command};
-use tokio::sync::{broadcast, mpsc, Mutex};
-use tokio::time::{interval, Duration, Instant};
-use tracing::{debug, error, info, warn};
-use uuid::Uuid;
-
-mod proxy;
-mod stdio_handler;
-
-use proxy::MCPProxy;
+use mcp_proxy::{run_proxy_app, ProxyArgs};
 
 #[derive(Parser)]
 #[command(name = "mcp-proxy")]
@@ -48,26 +35,14 @@ pub struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
     
-    // Initialize tracing
-    let log_level = if args.verbose { "debug" } else { "info" };
-    tracing_subscriber::fmt()
-        .with_env_filter(format!("mcp_proxy={},mcp_common={}", log_level, log_level))
-        .init();
-
-    info!("Starting MCP Proxy: {}", args.name);
-    info!("Target command: {}", args.command);
+    let proxy_args = ProxyArgs {
+        command: args.command,
+        name: args.name,
+        ipc_socket: args.ipc_socket,
+        verbose: args.verbose,
+        shell: args.shell,
+        no_monitor: args.no_monitor,
+    };
     
-    if args.command.is_empty() {
-        return Err(anyhow::anyhow!("No command specified. Use --command to specify the MCP server command."));
-    }
-
-    // Create proxy instance
-    let proxy_id = ProxyId::new();
-    let mut proxy = MCPProxy::new(proxy_id.clone(), args.name.clone(), args.command.clone(), args.shell).await?;
-    
-    // Start the proxy
-    let ipc_socket = if args.no_monitor { None } else { Some(args.ipc_socket.as_str()) };
-    proxy.start(ipc_socket).await?;
-    
-    Ok(())
+    run_proxy_app(proxy_args).await
 }

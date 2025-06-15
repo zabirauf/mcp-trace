@@ -473,6 +473,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcpdebug"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "mcp-monitor",
+ "mcp-proxy",
+ "tokio",
+]
+
+[[package]]
 name = "memchr"
 version = "2.7.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
