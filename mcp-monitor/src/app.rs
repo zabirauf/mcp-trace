@@ -22,8 +22,6 @@ pub struct App {
     pub logs: Vec<LogEntry>,
     pub scroll_offset: usize,
     pub selected_proxy: Option<ProxyId>,
-    pub show_stats: bool,
-    pub filter_level: Option<LogLevel>,
     pub active_tab: TabType,
     pub tab_scroll_offsets: HashMap<TabType, usize>,
     pub selected_log_index: Option<usize>,
@@ -44,8 +42,6 @@ impl App {
             logs: Vec::new(),
             scroll_offset: 0,
             selected_proxy: None,
-            show_stats: true,
-            filter_level: None,
             active_tab: TabType::Messages,  // Default to Messages tab
             tab_scroll_offsets,
             selected_log_index: None,
@@ -89,17 +85,6 @@ impl App {
         }
     }
 
-    fn matches_filter_level(&self, entry_level: &LogLevel, filter_level: &LogLevel) -> bool {
-        use LogLevel::*;
-        match filter_level {
-            Error => matches!(entry_level, Error),
-            Warning => matches!(entry_level, Error | Warning),
-            Info => matches!(entry_level, Error | Warning | Info),
-            Debug => true, // Show all
-            Request => matches!(entry_level, Request),
-            Response => matches!(entry_level, Response),
-        }
-    }
 
     pub fn clear_logs(&mut self) {
         self.logs.clear();

@@ -1,14 +1,11 @@
 use anyhow::Result;
 use mcp_common::{
-    IpcClient, IpcMessage, JsonRpcMessage, LogEntry, LogLevel, ProxyId, ProxyInfo, ProxyStats, ProxyStatus
+    IpcClient, IpcMessage, ProxyId, ProxyInfo, ProxyStats, ProxyStatus
 };
 use std::process::Stdio;
 use std::sync::Arc;
-use std::time::Instant;
-use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, Command};
-use tokio::sync::{broadcast, mpsc, Mutex};
-use tokio::time::{interval, Duration};
+use tokio::sync::{broadcast, Mutex};
 use tracing::{debug, info, warn};
 
 use crate::stdio_handler::StdioHandler;
@@ -19,7 +16,6 @@ pub struct MCPProxy {
     command: String,
     use_shell: bool,
     stats: Arc<Mutex<ProxyStats>>,
-    start_time: Instant,
     shutdown_tx: Option<broadcast::Sender<()>>,
 }
 
@@ -34,7 +30,6 @@ impl MCPProxy {
             command,
             use_shell,
             stats: Arc::new(Mutex::new(stats)),
-            start_time: Instant::now(),
             shutdown_tx: None,
         })
     }
@@ -89,11 +84,7 @@ impl MCPProxy {
             ipc_client,
         ).await?;
 
-        // Update status to running
-        {
-            let mut stats = self.stats.lock().await;
-            // Note: ProxyStats doesn't have a status field, but we track it in ProxyInfo
-        }
+        // Note: ProxyStats doesn't have a status field, but we track it in ProxyInfo
 
         // Handle STDIO communication
         let result = handler.handle_communication(&mut child, shutdown_rx).await;
@@ -150,9 +141,4 @@ impl MCPProxy {
         Ok(child)
     }
 
-    pub async fn get_stats(&self) -> ProxyStats {
-        let mut stats = self.stats.lock().await.clone();
-        stats.uptime = self.start_time.elapsed();
-        stats
-    }
 }

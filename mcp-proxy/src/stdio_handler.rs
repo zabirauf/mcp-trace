@@ -1,9 +1,9 @@
 use anyhow::Result;
-use mcp_common::{IpcClient, IpcMessage, JsonRpcMessage, LogEntry, LogLevel, ProxyId, ProxyStats};
+use mcp_common::{IpcClient, IpcMessage, LogEntry, LogLevel, ProxyId, ProxyStats};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::Child;
-use tokio::sync::{broadcast, mpsc, Mutex};
+use tokio::sync::{broadcast, Mutex};
 use tokio::time::{interval, Duration};
 use tracing::{debug, error, info, warn};
 
@@ -46,9 +46,7 @@ impl StdioHandler {
         let mut user_stdin = BufReader::new(tokio::io::stdin());
         let mut user_stdout = tokio::io::stdout();
 
-        // Channels for communication between tasks
-        let (to_child_tx, mut to_child_rx) = mpsc::channel::<String>(100);
-        let (from_child_tx, mut from_child_rx) = mpsc::channel::<String>(100);
+        // Channels removed - not needed for direct STDIO handling
 
         loop {
             tokio::select! {
