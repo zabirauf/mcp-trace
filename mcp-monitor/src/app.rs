@@ -23,12 +23,20 @@ pub enum NavigationMode {
     Navigate,   // Manual navigation with selection
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum FocusArea {
+    ProxyList,  // Focus on the proxy list (left panel)
+    LogView,    // Focus on the log view (right panel)
+}
+
 pub struct App {
     pub proxies: HashMap<ProxyId, ProxyInfo>,
     pub logs: Vec<LogEntry>,
     pub selected_index: usize,  // Currently selected item in the filtered list
     pub viewport_offset: usize, // First visible item in the viewport
     pub selected_proxy: Option<ProxyId>,
+    pub proxy_selected_index: usize, // Currently selected proxy in the list
+    pub focus_area: FocusArea, // Which area has focus
     pub active_tab: TabType,
     pub tab_states: HashMap<TabType, ListState>, // Store selection and viewport for each tab
     pub selected_log_index: Option<usize>,
@@ -58,6 +66,8 @@ impl App {
             selected_index: 0,
             viewport_offset: 0,
             selected_proxy: None,
+            proxy_selected_index: 0,
+            focus_area: FocusArea::LogView, // Default focus on logs
             active_tab: TabType::Messages,  // Default to Messages tab
             tab_states,
             selected_log_index: None,
@@ -211,6 +221,62 @@ impl App {
             state.viewport_offset = self.viewport_offset;
             state.navigation_mode = self.navigation_mode;
         }
+    }
+
+    // Focus and proxy selection methods
+    pub fn switch_focus_to_proxy_list(&mut self) {
+        self.focus_area = FocusArea::ProxyList;
+    }
+    
+    pub fn switch_focus_to_logs(&mut self) {
+        self.focus_area = FocusArea::LogView;
+    }
+    
+    pub fn proxy_scroll_up(&mut self) {
+        if self.proxy_selected_index > 0 {
+            self.proxy_selected_index -= 1;
+        }
+    }
+    
+    pub fn proxy_scroll_down(&mut self) {
+        let proxy_count = self.get_proxy_list().len();
+        if proxy_count > 0 && self.proxy_selected_index < proxy_count - 1 {
+            self.proxy_selected_index += 1;
+        }
+    }
+    
+    pub fn select_current_proxy(&mut self) {
+        let proxy_list = self.get_proxy_list();
+        if self.proxy_selected_index < proxy_list.len() {
+            let selected_proxy_id = proxy_list[self.proxy_selected_index].id.clone();
+            self.selected_proxy = Some(selected_proxy_id);
+            
+            // Reset log selection to latest when changing proxy filter
+            self.navigation_mode = NavigationMode::Follow;
+            let filtered_logs = self.get_filtered_logs();
+            if !filtered_logs.is_empty() {
+                self.selected_index = filtered_logs.len() - 1;
+            } else {
+                self.selected_index = 0;
+            }
+            self.viewport_offset = 0;
+            self.save_tab_state();
+        }
+    }
+    
+    pub fn clear_proxy_selection(&mut self) {
+        self.selected_proxy = None;
+        
+        // Reset log selection to latest when clearing proxy filter
+        self.navigation_mode = NavigationMode::Follow;
+        let filtered_logs = self.get_filtered_logs();
+        if !filtered_logs.is_empty() {
+            self.selected_index = filtered_logs.len() - 1;
+        } else {
+            self.selected_index = 0;
+        }
+        self.viewport_offset = 0;
+        self.save_tab_state();
     }
 
     pub fn tick(&mut self) {

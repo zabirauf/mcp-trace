@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 mod app;
 mod ui;
 
-use app::{App, AppEvent, TabType};
+use app::{App, AppEvent, TabType, FocusArea};
 
 pub struct MonitorArgs {
     pub ipc_socket: String,
@@ -165,13 +165,46 @@ async fn run_app<B: Backend>(
                             KeyCode::Char('c') if key.modifiers.contains(KeyModifiers::CONTROL) => break,
                             KeyCode::Char('c') => app.clear_logs(),
                             KeyCode::Char('r') => app.refresh(),
-                            KeyCode::Up => app.scroll_up(),
-                            KeyCode::Down => app.scroll_down(),
-                            KeyCode::PageUp => app.page_up(),
-                            KeyCode::PageDown => app.page_down(),
-                            KeyCode::Home => app.scroll_to_top(),
-                            KeyCode::End => app.scroll_to_bottom(),
-                            KeyCode::Esc => app.exit_navigation_mode(),
+                            KeyCode::Left => app.switch_focus_to_proxy_list(),
+                            KeyCode::Right => app.switch_focus_to_logs(),
+                            KeyCode::Up => {
+                                match app.focus_area {
+                                    FocusArea::ProxyList => app.proxy_scroll_up(),
+                                    FocusArea::LogView => app.scroll_up(),
+                                }
+                            },
+                            KeyCode::Down => {
+                                match app.focus_area {
+                                    FocusArea::ProxyList => app.proxy_scroll_down(),
+                                    FocusArea::LogView => app.scroll_down(),
+                                }
+                            },
+                            KeyCode::PageUp => {
+                                if app.focus_area == FocusArea::LogView {
+                                    app.page_up();
+                                }
+                            },
+                            KeyCode::PageDown => {
+                                if app.focus_area == FocusArea::LogView {
+                                    app.page_down();
+                                }
+                            },
+                            KeyCode::Home => {
+                                if app.focus_area == FocusArea::LogView {
+                                    app.scroll_to_top();
+                                }
+                            },
+                            KeyCode::End => {
+                                if app.focus_area == FocusArea::LogView {
+                                    app.scroll_to_bottom();
+                                }
+                            },
+                            KeyCode::Esc => {
+                                match app.focus_area {
+                                    FocusArea::ProxyList => app.clear_proxy_selection(),
+                                    FocusArea::LogView => app.exit_navigation_mode(),
+                                }
+                            },
                             KeyCode::Tab => app.next_tab(),
                             KeyCode::BackTab => app.prev_tab(),
                             KeyCode::Char('1') => app.switch_tab(TabType::All),
@@ -179,8 +212,13 @@ async fn run_app<B: Backend>(
                             KeyCode::Char('3') => app.switch_tab(TabType::Errors),
                             KeyCode::Char('4') => app.switch_tab(TabType::System),
                             KeyCode::Enter => {
-                                app.select_log_at_cursor();
-                                app.show_selected_log_detail();
+                                match app.focus_area {
+                                    FocusArea::ProxyList => app.select_current_proxy(),
+                                    FocusArea::LogView => {
+                                        app.select_log_at_cursor();
+                                        app.show_selected_log_detail();
+                                    },
+                                }
                             },
                             _ => {}
                         }

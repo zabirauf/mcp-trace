@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{block::Title, *},
 };
 
-use crate::app::{App, TabType, NavigationMode};
+use crate::app::{App, TabType, NavigationMode, FocusArea};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.size();
@@ -54,7 +54,8 @@ fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
     
     let items: Vec<ListItem> = proxies
         .iter()
-        .map(|proxy| {
+        .enumerate()
+        .map(|(_index, proxy)| {
             let status_symbol = match proxy.status {
                 ProxyStatus::Running => "🟢",
                 ProxyStatus::Starting => "🟡",
@@ -62,29 +63,62 @@ fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
                 ProxyStatus::Error(_) => "❌",
             };
             
+            // Add filter indicator if this proxy is selected for filtering
+            let filter_indicator = if app.selected_proxy.as_ref() == Some(&proxy.id) {
+                " [FILTERED]"
+            } else {
+                ""
+            };
+            
             let text = format!(
-                "{} {} ({})",
+                "{} {} ({}){}", 
                 status_symbol,
                 proxy.name,
-                proxy.stats.total_requests
+                proxy.stats.total_requests,
+                filter_indicator
             );
             
-            ListItem::new(text)
+            // Highlight the filtered proxy
+            if app.selected_proxy.as_ref() == Some(&proxy.id) {
+                ListItem::new(text).style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+            } else {
+                ListItem::new(text)
+            }
         })
         .collect();
+
+    // Create focus indicator for the title - keep it shorter
+    let (title_text, title_color) = match app.focus_area {
+        FocusArea::ProxyList => ("Proxies *", Color::Green),
+        FocusArea::LogView => ("Proxies", Color::Gray),
+    };
+    
+    // Add concise instructions for the narrow panel
+    let instructions = if app.focus_area == FocusArea::ProxyList {
+        "↑↓ Enter Esc"
+    } else {
+        "← to focus"
+    };
 
     let list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("MCP Proxies")
+                .title(Title::from(Span::styled(title_text, Style::default().fg(title_color).add_modifier(Modifier::BOLD))))
+                .title(Title::from(instructions).alignment(Alignment::Left).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
         )
         .style(Style::default().fg(Color::White))
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol(">");
 
-    f.render_widget(list, area);
+    // Create selection state for the proxy list
+    let mut state = ListState::default();
+    if app.focus_area == FocusArea::ProxyList && !proxies.is_empty() {
+        state.select(Some(app.proxy_selected_index.min(proxies.len().saturating_sub(1))));
+    }
+
+    f.render_stateful_widget(list, area, &mut state);
 }
 
 fn draw_stats(f: &mut Frame, app: &App, area: Rect) {
@@ -233,13 +267,30 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
         NavigationMode::Navigate => ("NAVIGATE", Color::Yellow),
     };
     
+    // Create focus indicator for logs
+    let logs_title = match app.focus_area {
+        FocusArea::LogView => "Logs [FOCUSED]",
+        FocusArea::ProxyList => "Logs",
+    };
+    
+    // Add proxy filter indication to title
+    let proxy_filter_text = if let Some(ref proxy_id) = app.selected_proxy {
+        if let Some(proxy) = app.proxies.get(proxy_id) {
+            format!(" | Filtered by: {}", proxy.name)
+        } else {
+            " | Filtered".to_string()
+        }
+    } else {
+        String::new()
+    };
+    
     let logs_list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title(Title::from("Logs").alignment(Alignment::Center))
-                .title(Title::from(Span::styled(format!("[{}]", mode_text), Style::default().fg(mode_color).add_modifier(Modifier::BOLD))).alignment(Alignment::Left))
-                .title(Title::from(format!("({}/{}) [Enter: View Details]", display_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
+                .title(Title::from(logs_title).alignment(Alignment::Center))
+                .title(Title::from(Span::styled(format!("[{}]{}", mode_text, proxy_filter_text), Style::default().fg(mode_color).add_modifier(Modifier::BOLD))).alignment(Alignment::Left))
+                .title(Title::from(format!("({}/{}) [Enter: View Details] | →: Focus here", display_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
@@ -253,8 +304,8 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
-        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ↑↓: Navigate | Esc: Follow mode | PgUp/PgDn: Page | Home/End: Top/Bottom"),
-        Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection | Enter: View log details"),
+        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ←→: Switch focus | ↑↓: Navigate | Esc: Follow/Clear filter | Enter: Select"),
+        Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection | PgUp/PgDn: Page | Home/End: Top/Bottom"),
     ];
 
     let paragraph = Paragraph::new(help_text)
