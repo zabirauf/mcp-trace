@@ -1,6 +1,8 @@
 use anyhow::Result;
 use clap::Parser;
 use mcp_proxy::{run_proxy_app, ProxyArgs};
+use rand::{thread_rng, Rng};
+use rand::distributions::Alphanumeric;
 
 #[derive(Parser)]
 #[command(name = "mcp-proxy")]
@@ -11,8 +13,8 @@ pub struct Args {
     pub command: String,
     
     /// Name for this proxy instance
-    #[arg(short, long, default_value = "mcp-proxy")]
-    pub name: String,
+    #[arg(short, long)]
+    pub name: Option<String>,
     
     /// IPC socket path for monitor communication
     #[arg(short, long, default_value = "/tmp/mcp-monitor.sock")]
@@ -35,9 +37,19 @@ pub struct Args {
 async fn main() -> Result<()> {
     let args = Args::parse();
     
+    // Generate random name if none provided
+    let name = args.name.unwrap_or_else(|| {
+        let random_suffix: String = thread_rng()
+            .sample_iter(&Alphanumeric)
+            .take(6)
+            .map(char::from)
+            .collect();
+        format!("mcp-proxy-{}", random_suffix)
+    });
+    
     let proxy_args = ProxyArgs {
         command: args.command,
-        name: args.name,
+        name,
         ipc_socket: args.ipc_socket,
         verbose: args.verbose,
         shell: args.shell,
