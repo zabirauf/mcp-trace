@@ -42,6 +42,7 @@ pub struct App {
     pub selected_log_index: Option<usize>,
     pub show_detail_view: bool,
     pub detail_word_wrap: bool,
+    pub detail_scroll_offset: u16, // Vertical scroll offset for detail view
     pub navigation_mode: NavigationMode,
 }
 
@@ -73,6 +74,7 @@ impl App {
             selected_log_index: None,
             show_detail_view: false,
             detail_word_wrap: true,
+            detail_scroll_offset: 0,
             navigation_mode: NavigationMode::Follow,
         }
     }
@@ -470,10 +472,20 @@ impl App {
     pub fn hide_detail_view(&mut self) {
         self.show_detail_view = false;
         self.selected_log_index = None;
+        self.detail_scroll_offset = 0; // Reset scroll when hiding
     }
     
     pub fn toggle_word_wrap(&mut self) {
         self.detail_word_wrap = !self.detail_word_wrap;
+        self.detail_scroll_offset = 0; // Reset scroll when toggling wrap
+    }
+    
+    pub fn detail_scroll_up(&mut self) {
+        self.detail_scroll_offset = self.detail_scroll_offset.saturating_sub(3);
+    }
+    
+    pub fn detail_scroll_down(&mut self) {
+        self.detail_scroll_offset = self.detail_scroll_offset.saturating_add(3);
     }
     
     pub fn get_selected_log(&self) -> Option<&LogEntry> {
@@ -485,23 +497,75 @@ impl App {
     }
     
     pub fn format_log_content(&self, log: &LogEntry) -> String {
-        // Try to format metadata as pretty JSON if available
+        // First priority: format metadata as pretty JSON if available
         if let Some(ref metadata) = log.metadata {
             match serde_json::to_string_pretty(metadata) {
-                Ok(formatted) => return formatted,
+                Ok(formatted) => {
+                    return format!("=== METADATA ===\n{}\n\n=== MESSAGE ===\n{}", 
+                        formatted, self.format_message_content(&log.message));
+                },
                 Err(_) => {},
             }
         }
         
-        // Try to parse the message as JSON and format it
-        if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(&log.message) {
-            match serde_json::to_string_pretty(&json_value) {
-                Ok(formatted) => return formatted,
-                Err(_) => {},
+        // Second priority: just format the message
+        self.format_message_content(&log.message)
+    }
+    
+    fn format_message_content(&self, message: &str) -> String {
+        let trimmed = message.trim();
+        
+        // Clean up the message by removing common prefixes and control characters
+        let cleaned = self.clean_json_message(trimmed);
+        
+        // Try to parse the cleaned message as JSON and format it
+        match serde_json::from_str::<serde_json::Value>(&cleaned) {
+            Ok(json_value) => {
+                match serde_json::to_string_pretty(&json_value) {
+                    Ok(formatted) => {
+                        return formatted; // Return just the formatted JSON
+                    },
+                    Err(_) => {
+                        return format!("JSON parse success but format failed:\n{}", cleaned);
+                    }
+                }
+            },
+            Err(_) => {
+                // If cleaning didn't work, try parsing the original
+                if let Ok(json_value) = serde_json::from_str::<serde_json::Value>(trimmed) {
+                    if let Ok(formatted) = serde_json::to_string_pretty(&json_value) {
+                        return formatted;
+                    }
+                }
             }
         }
         
-        // Fallback to the raw message
-        log.message.clone()
+        // If it's not JSON, return the original message
+        trimmed.to_string()
+    }
+    
+    fn clean_json_message(&self, message: &str) -> String {
+        let mut cleaned = message.to_string();
+        
+        // Remove common prefixes that might interfere with JSON parsing
+        let prefixes_to_remove = ["<-", "->", "<<", ">>", "IN:", "OUT:", "REQ:", "RESP:"];
+        
+        for prefix in &prefixes_to_remove {
+            if cleaned.trim_start().starts_with(prefix) {
+                cleaned = cleaned.trim_start().strip_prefix(prefix).unwrap_or(&cleaned).to_string();
+                cleaned = cleaned.trim_start().to_string(); // Remove any remaining whitespace
+                break;
+            }
+        }
+        
+        // Remove any leading/trailing whitespace and control characters
+        cleaned = cleaned.trim().to_string();
+        
+        // Remove any remaining non-printable characters at the start
+        while cleaned.chars().next().map_or(false, |c| c.is_control() && c != '\n' && c != '\r' && c != '\t') {
+            cleaned = cleaned.chars().skip(1).collect();
+        }
+        
+        cleaned
     }
 }

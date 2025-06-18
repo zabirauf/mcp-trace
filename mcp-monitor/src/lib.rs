@@ -156,6 +156,16 @@ async fn run_app<B: Backend>(
                         match key.code {
                             KeyCode::Esc => app.hide_detail_view(),
                             KeyCode::Char('w') | KeyCode::Char('W') => app.toggle_word_wrap(),
+                            KeyCode::Up => app.detail_scroll_up(),
+                            KeyCode::Down => app.detail_scroll_down(),
+                            KeyCode::PageUp => {
+                                for _ in 0..10 { app.detail_scroll_up(); }
+                            },
+                            KeyCode::PageDown => {
+                                for _ in 0..10 { app.detail_scroll_down(); }
+                            },
+                            KeyCode::Home => app.detail_scroll_offset = 0,
+                            KeyCode::End => app.detail_scroll_offset = 1000, // Large number to scroll to bottom
                             _ => {}
                         }
                     } else {

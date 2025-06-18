@@ -383,11 +383,25 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
         
         // Content area with word wrap toggle
         let wrap_indicator = if app.detail_word_wrap { "ON" } else { "OFF" };
-        let content_paragraph = Paragraph::new(content)
+        
+        // Create text from content with proper line breaks
+        let text = if app.detail_word_wrap {
+            // When word wrap is on, create a single text block that will be wrapped
+            Text::from(content)
+        } else {
+            // When word wrap is off, split into lines to preserve formatting
+            let lines: Vec<Line> = content
+                .lines()
+                .map(|line| Line::from(line.to_string()))
+                .collect();
+            Text::from(lines)
+        };
+        
+        let content_paragraph = Paragraph::new(text)
             .block(
                 Block::default()
                     .borders(Borders::ALL)
-                    .title(format!("Content [Word Wrap: {}]", wrap_indicator))
+                    .title(format!("Content [Word Wrap: {}] [W: Toggle]", wrap_indicator))
                     .border_set(border::ROUNDED),
             )
             .style(Style::default().fg(Color::White))
@@ -395,11 +409,12 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
                 Wrap { trim: true } 
             } else { 
                 Wrap { trim: false } 
-            });
+            })
+            .scroll((app.detail_scroll_offset, 0)); // Use scroll offset
         
         // Footer with controls
         let footer_text = vec![
-            Line::from("ESC: Close | W: Toggle Word Wrap | ↑↓: Scroll")
+            Line::from("ESC: Close | W: Toggle Word Wrap | ↑↓: Scroll | PgUp/PgDn: Page scroll | Home/End: Top/Bottom")
         ];
         
         let footer = Paragraph::new(footer_text)
