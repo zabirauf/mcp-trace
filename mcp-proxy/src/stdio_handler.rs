@@ -1,5 +1,5 @@
 use anyhow::Result;
-use mcp_common::{IpcClient, IpcMessage, LogEntry, LogLevel, ProxyId, ProxyStats};
+use mcp_common::{IpcMessage, LogEntry, LogLevel, ProxyId, ProxyStats};
 use std::sync::Arc;
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader, BufWriter};
 use tokio::process::Child;
@@ -7,10 +7,12 @@ use tokio::sync::{broadcast, Mutex};
 use tokio::time::{interval, Duration};
 use tracing::{debug, error, info, warn};
 
+use crate::buffered_ipc_client::BufferedIpcClient;
+
 pub struct StdioHandler {
     proxy_id: ProxyId,
     stats: Arc<Mutex<ProxyStats>>,
-    ipc_client: Option<IpcClient>,
+    ipc_client: Option<Arc<BufferedIpcClient>>,
     stats_interval: tokio::time::Interval,
 }
 
@@ -18,7 +20,7 @@ impl StdioHandler {
     pub async fn new(
         proxy_id: ProxyId,
         stats: Arc<Mutex<ProxyStats>>,
-        ipc_client: Option<IpcClient>,
+        ipc_client: Option<Arc<BufferedIpcClient>>,
     ) -> Result<Self> {
         let stats_interval = interval(Duration::from_secs(1));
         
@@ -58,7 +60,7 @@ impl StdioHandler {
 
                 // Handle stats updates
                 _ = self.stats_interval.tick() => {
-                    if let Some(ref mut client) = self.ipc_client {
+                    if let Some(ref client) = self.ipc_client {
                         let stats = self.stats.lock().await.clone();
                         if let Err(e) = client.send(IpcMessage::StatsUpdate(stats)).await {
                             warn!("Failed to send stats update: {}", e);
@@ -194,7 +196,7 @@ impl StdioHandler {
             self.proxy_id.clone(),
         );
 
-        if let Some(ref mut client) = self.ipc_client {
+        if let Some(ref client) = self.ipc_client {
             if let Err(e) = client.send(IpcMessage::LogEntry(log_entry)).await {
                 warn!("Failed to send log entry: {}", e);
             }
@@ -210,7 +212,7 @@ impl StdioHandler {
             self.proxy_id.clone(),
         );
 
-        if let Some(ref mut client) = self.ipc_client {
+        if let Some(ref client) = self.ipc_client {
             if let Err(e) = client.send(IpcMessage::LogEntry(log_entry)).await {
                 warn!("Failed to send log entry: {}", e);
             }
@@ -226,7 +228,7 @@ impl StdioHandler {
             self.proxy_id.clone(),
         );
 
-        if let Some(ref mut client) = self.ipc_client {
+        if let Some(ref client) = self.ipc_client {
             if let Err(e) = client.send(IpcMessage::LogEntry(log_entry)).await {
                 warn!("Failed to send log entry: {}", e);
             }
@@ -235,7 +237,4 @@ impl StdioHandler {
         error!("Child stderr: {}", content.trim());
     }
 
-    pub fn take_ipc_client(&mut self) -> Option<IpcClient> {
-        self.ipc_client.take()
-    }
 }

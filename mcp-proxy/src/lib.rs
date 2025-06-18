@@ -4,6 +4,7 @@ use tracing::info;
 
 mod proxy;
 mod stdio_handler;
+mod buffered_ipc_client;
 
 use proxy::MCPProxy;
 

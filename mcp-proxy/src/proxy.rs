@@ -1,14 +1,15 @@
 use anyhow::Result;
 use mcp_common::{
-    IpcClient, IpcMessage, ProxyId, ProxyInfo, ProxyStats, ProxyStatus
+    IpcMessage, ProxyId, ProxyInfo, ProxyStats, ProxyStatus
 };
 use std::process::Stdio;
 use std::sync::Arc;
 use tokio::process::{Child, Command};
 use tokio::sync::{broadcast, Mutex};
-use tracing::{debug, info, warn};
+use tracing::{info, warn};
 
 use crate::stdio_handler::StdioHandler;
+use crate::buffered_ipc_client::BufferedIpcClient;
 
 pub struct MCPProxy {
     id: ProxyId,
@@ -41,25 +42,17 @@ impl MCPProxy {
         let (shutdown_tx, shutdown_rx) = broadcast::channel(1);
         self.shutdown_tx = Some(shutdown_tx);
 
-        // Connect to monitor (optional)
-        let mut ipc_client = if let Some(socket_path) = ipc_socket_path {
-            match IpcClient::connect(socket_path).await {
-                Ok(client) => {
-                    info!("Connected to monitor at {}", socket_path);
-                    Some(client)
-                }
-                Err(_) => {
-                    debug!("Monitor not available. Running in standalone mode.");
-                    None
-                }
-            }
+        // Create buffered IPC client (unless monitor is explicitly disabled)
+        let buffered_client = if let Some(socket_path) = ipc_socket_path {
+            info!("Creating buffered IPC client for monitor at {}", socket_path);
+            Some(Arc::new(BufferedIpcClient::new(socket_path.to_string()).await))
         } else {
             info!("Running in standalone mode (monitor disabled)");
             None
         };
 
         // Send proxy started message
-        if let Some(ref mut client) = ipc_client {
+        if let Some(ref client) = buffered_client {
             let proxy_info = ProxyInfo {
                 id: self.id.clone(),
                 name: self.name.clone(),
@@ -81,7 +74,7 @@ impl MCPProxy {
         let mut handler = StdioHandler::new(
             self.id.clone(),
             self.stats.clone(),
-            ipc_client,
+            buffered_client.clone(),
         ).await?;
 
         // Note: ProxyStats doesn't have a status field, but we track it in ProxyInfo
@@ -95,10 +88,14 @@ impl MCPProxy {
             warn!("Failed to kill MCP server process: {}", e);
         }
 
-        // Send proxy stopped message
-        if let Some(mut client) = handler.take_ipc_client() {
+        // Send proxy stopped message and shutdown buffered client
+        if let Some(client) = buffered_client {
             if let Err(e) = client.send(IpcMessage::ProxyStopped(self.id.clone())).await {
                 warn!("Failed to send proxy stopped message: {}", e);
+            }
+            // Take the client out of the Arc and shutdown
+            if let Ok(client) = Arc::try_unwrap(client) {
+                client.shutdown().await;
             }
         }
 
