@@ -9,7 +9,7 @@ use ratatui::{prelude::*};
 use std::io;
 use std::time::Duration;
 use tokio::sync::mpsc;
-use tracing::{error, info};
+// Remove unused tracing imports that interfere with TUI
 
 mod app;
 mod ui;
@@ -22,14 +22,24 @@ pub struct MonitorArgs {
 }
 
 pub async fn run_monitor_app(args: MonitorArgs) -> Result<()> {
-    // Initialize tracing
+    // Initialize tracing to write to a file instead of stdout/stderr to avoid TUI interference
     let log_level = if args.verbose { "debug" } else { "info" };
-    tracing_subscriber::fmt()
-        .with_env_filter(format!("mcp_monitor={},mcp_common={}", log_level, log_level))
-        .init();
-
-    info!("Starting MCP Monitor");
-    info!("IPC socket: {}", args.ipc_socket);
+    
+    if args.verbose {
+        // Only initialize file logging if verbose is requested
+        use std::fs::OpenOptions;
+        
+        let log_file = OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open("/tmp/mcp-monitor.log")
+            .unwrap_or_else(|_| std::fs::File::create("/dev/null").unwrap());
+            
+        tracing_subscriber::fmt()
+            .with_env_filter(format!("mcp_monitor={},mcp_common={}", log_level, log_level))
+            .with_writer(log_file)
+            .init();
+    }
 
     // Setup terminal
     enable_raw_mode()?;
@@ -47,9 +57,8 @@ pub async fn run_monitor_app(args: MonitorArgs) -> Result<()> {
     // Start IPC server in background
     let ipc_socket_path = args.ipc_socket.clone();
     tokio::spawn(async move {
-        if let Err(e) = run_ipc_server(&ipc_socket_path, event_tx).await {
-            error!("IPC server error: {}", e);
-        }
+        let _ = run_ipc_server(&ipc_socket_path, event_tx).await;
+        // Remove error logging to avoid TUI interference
     });
 
     // Run the app
@@ -69,12 +78,12 @@ pub async fn run_monitor_app(args: MonitorArgs) -> Result<()> {
 
 async fn run_ipc_server(socket_path: &str, event_tx: mpsc::Sender<AppEvent>) -> Result<()> {
     let server = IpcServer::bind(socket_path).await?;
-    info!("IPC server listening on: {}", socket_path);
+    // Remove logging that interferes with TUI
 
     loop {
         match server.accept().await {
             Ok(mut connection) => {
-                info!("New proxy connected");
+                // Remove "New proxy connected" log
                 let tx = event_tx.clone();
                 
                 tokio::spawn(async move {
@@ -97,25 +106,25 @@ async fn run_ipc_server(socket_path: &str, event_tx: mpsc::Sender<AppEvent>) -> 
                                     _ => continue,
                                 };
                                 
-                                if let Err(e) = tx.send(event).await {
-                                    error!("Failed to send app event: {}", e);
+                                if tx.send(event).await.is_err() {
+                                    // Remove error logging
                                     break;
                                 }
                             }
                             Ok(None) => {
-                                info!("Proxy disconnected");
+                                // Remove "Proxy disconnected" log
                                 break;
                             }
-                            Err(e) => {
-                                error!("Failed to receive IPC message: {}", e);
+                            Err(_e) => {
+                                // Remove error logging
                                 break;
                             }
                         }
                     }
                 });
             }
-            Err(e) => {
-                error!("Failed to accept connection: {}", e);
+            Err(_e) => {
+                // Remove error logging
                 tokio::time::sleep(Duration::from_millis(100)).await;
             }
         }
