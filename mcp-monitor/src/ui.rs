@@ -5,7 +5,7 @@ use ratatui::{
     widgets::{block::Title, *},
 };
 
-use crate::app::{App, TabType};
+use crate::app::{App, TabType, NavigationMode};
 
 pub fn draw(f: &mut Frame, app: &mut App) {
     let size = f.size();
@@ -168,8 +168,16 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(tabs_widget, area);
 }
 
-fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
-    let visible_logs = app.get_visible_logs(area.height as usize);
+fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
+    // Prepare viewport first
+    let visible_height = area.height.saturating_sub(2) as usize;
+    app.prepare_viewport(visible_height);
+    
+    // Get data for rendering
+    let visible_logs = app.get_visible_logs(visible_height);
+    let relative_selection = app.get_relative_selection(visible_height);
+    let filtered_count = app.get_filtered_logs().len();
+    let display_position = if filtered_count > 0 { app.selected_index + 1 } else { 0 };
     
     let items: Vec<ListItem> = visible_logs
         .iter()
@@ -218,30 +226,34 @@ fn draw_logs(f: &mut Frame, app: &App, area: Rect) {
             ListItem::new(text)
         })
         .collect();
-
-    let filtered_count = app.get_filtered_logs().len();
-    let scroll_position = if filtered_count > 0 { app.scroll_offset + 1 } else { 0 };
+    
+    // Create mode indicator
+    let (mode_text, mode_color) = match app.navigation_mode {
+        NavigationMode::Follow => ("FOLLOW", Color::Green),
+        NavigationMode::Navigate => ("NAVIGATE", Color::Yellow),
+    };
     
     let logs_list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(Title::from("Logs").alignment(Alignment::Center))
-                .title(Title::from(format!("({}/{}) [Enter: View Details]", scroll_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
+                .title(Title::from(Span::styled(format!("[{}]", mode_text), Style::default().fg(mode_color).add_modifier(Modifier::BOLD))).alignment(Alignment::Left))
+                .title(Title::from(format!("({}/{}) [Enter: View Details]", display_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
         )
         .highlight_style(Style::default().add_modifier(Modifier::REVERSED))
         .highlight_symbol(">");
 
     let mut state = ListState::default();
-    state.select(Some(0)); // Always highlight the current line
+    state.select(relative_selection);
     
     f.render_stateful_widget(logs_list, area, &mut state);
 }
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
-        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ↑↓: Scroll | PgUp/PgDn: Page | Home/End: Top/Bottom"),
+        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ↑↓: Navigate | Esc: Follow mode | PgUp/PgDn: Page | Home/End: Top/Bottom"),
         Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection | Enter: View log details"),
     ];
 

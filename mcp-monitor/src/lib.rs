@@ -162,6 +162,7 @@ async fn run_app<B: Backend>(
                             KeyCode::PageDown => app.page_down(),
                             KeyCode::Home => app.scroll_to_top(),
                             KeyCode::End => app.scroll_to_bottom(),
+                            KeyCode::Esc => app.exit_navigation_mode(),
                             KeyCode::Tab => app.next_tab(),
                             KeyCode::BackTab => app.prev_tab(),
                             KeyCode::Char('1') => app.switch_tab(TabType::All),

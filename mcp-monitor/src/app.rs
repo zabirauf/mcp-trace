@@ -17,36 +17,53 @@ pub enum TabType {
     System,    // Info + Debug + connection/disconnection logs
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavigationMode {
+    Follow,     // Automatically follow latest log
+    Navigate,   // Manual navigation with selection
+}
+
 pub struct App {
     pub proxies: HashMap<ProxyId, ProxyInfo>,
     pub logs: Vec<LogEntry>,
-    pub scroll_offset: usize,
+    pub selected_index: usize,  // Currently selected item in the filtered list
+    pub viewport_offset: usize, // First visible item in the viewport
     pub selected_proxy: Option<ProxyId>,
     pub active_tab: TabType,
-    pub tab_scroll_offsets: HashMap<TabType, usize>,
+    pub tab_states: HashMap<TabType, ListState>, // Store selection and viewport for each tab
     pub selected_log_index: Option<usize>,
     pub show_detail_view: bool,
     pub detail_word_wrap: bool,
+    pub navigation_mode: NavigationMode,
+}
+
+#[derive(Debug, Clone)]
+pub struct ListState {
+    pub selected_index: usize,
+    pub viewport_offset: usize,
+    pub navigation_mode: NavigationMode,
 }
 
 impl App {
     pub fn new() -> Self {
-        let mut tab_scroll_offsets = HashMap::new();
-        tab_scroll_offsets.insert(TabType::All, 0);
-        tab_scroll_offsets.insert(TabType::Messages, 0);
-        tab_scroll_offsets.insert(TabType::Errors, 0);
-        tab_scroll_offsets.insert(TabType::System, 0);
+        let mut tab_states = HashMap::new();
+        tab_states.insert(TabType::All, ListState { selected_index: 0, viewport_offset: 0, navigation_mode: NavigationMode::Follow });
+        tab_states.insert(TabType::Messages, ListState { selected_index: 0, viewport_offset: 0, navigation_mode: NavigationMode::Follow });
+        tab_states.insert(TabType::Errors, ListState { selected_index: 0, viewport_offset: 0, navigation_mode: NavigationMode::Follow });
+        tab_states.insert(TabType::System, ListState { selected_index: 0, viewport_offset: 0, navigation_mode: NavigationMode::Follow });
         
         Self {
             proxies: HashMap::new(),
             logs: Vec::new(),
-            scroll_offset: 0,
+            selected_index: 0,
+            viewport_offset: 0,
             selected_proxy: None,
             active_tab: TabType::Messages,  // Default to Messages tab
-            tab_scroll_offsets,
+            tab_states,
             selected_log_index: None,
             show_detail_view: false,
             detail_word_wrap: true,
+            navigation_mode: NavigationMode::Follow,
         }
     }
 
@@ -62,19 +79,31 @@ impl App {
                 }
             }
             AppEvent::NewLogEntry(entry) => {
-                // Store all logs without filtering
+                // Store all logs without filtering (logs are added at the bottom)
                 self.logs.push(entry);
                 
                 // Limit log size
                 const MAX_LOGS: usize = 10000;
                 if self.logs.len() > MAX_LOGS {
                     self.logs.drain(0..self.logs.len() - MAX_LOGS);
+                    
+                    // Adjust selection if logs were removed
+                    for state in self.tab_states.values_mut() {
+                        if state.selected_index > 0 {
+                            state.selected_index = state.selected_index.saturating_sub(self.logs.len() - MAX_LOGS);
+                        }
+                        if state.viewport_offset > 0 {
+                            state.viewport_offset = state.viewport_offset.saturating_sub(self.logs.len() - MAX_LOGS);
+                        }
+                    }
                 }
 
-                // Auto-scroll to bottom if we're already at the bottom for the current tab
-                let filtered_logs = self.get_filtered_logs();
-                if self.scroll_offset + 20 >= filtered_logs.len() {
-                    self.scroll_to_bottom();
+                // In follow mode, automatically select the latest log
+                if self.navigation_mode == NavigationMode::Follow {
+                    let filtered_logs = self.get_filtered_logs();
+                    if !filtered_logs.is_empty() {
+                        self.selected_index = filtered_logs.len() - 1;
+                    }
                 }
             }
             AppEvent::StatsUpdate(stats) => {
@@ -88,7 +117,15 @@ impl App {
 
     pub fn clear_logs(&mut self) {
         self.logs.clear();
-        self.scroll_offset = 0;
+        self.selected_index = 0;
+        self.viewport_offset = 0;
+        self.navigation_mode = NavigationMode::Follow;
+        // Reset all tab states
+        for state in self.tab_states.values_mut() {
+            state.selected_index = 0;
+            state.viewport_offset = 0;
+            state.navigation_mode = NavigationMode::Follow;
+        }
     }
 
     pub fn refresh(&mut self) {
@@ -97,45 +134,82 @@ impl App {
     }
 
     pub fn scroll_up(&mut self) {
-        if self.scroll_offset > 0 {
-            self.scroll_offset -= 1;
-            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        self.navigation_mode = NavigationMode::Navigate;
+        if self.selected_index > 0 {
+            self.selected_index -= 1;
+            self.ensure_selection_visible();
+            self.save_tab_state();
         }
     }
 
     pub fn scroll_down(&mut self) {
+        self.navigation_mode = NavigationMode::Navigate;
         let filtered_count = self.get_filtered_logs().len();
-        if self.scroll_offset + 1 < filtered_count {
-            self.scroll_offset += 1;
-            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        if filtered_count > 0 && self.selected_index < filtered_count - 1 {
+            self.selected_index += 1;
+            self.ensure_selection_visible();
+            self.save_tab_state();
         }
     }
 
     pub fn page_up(&mut self) {
-        self.scroll_offset = self.scroll_offset.saturating_sub(10);
-        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        self.navigation_mode = NavigationMode::Navigate;
+        let page_size = 10;
+        self.selected_index = self.selected_index.saturating_sub(page_size);
+        self.ensure_selection_visible();
+        self.save_tab_state();
     }
 
     pub fn page_down(&mut self) {
+        self.navigation_mode = NavigationMode::Navigate;
+        let page_size = 10;
         let filtered_count = self.get_filtered_logs().len();
-        if self.scroll_offset + 10 < filtered_count {
-            self.scroll_offset += 10;
-        } else {
-            self.scroll_to_bottom();
+        if filtered_count > 0 {
+            self.selected_index = (self.selected_index + page_size).min(filtered_count - 1);
+            self.ensure_selection_visible();
+            self.save_tab_state();
         }
-        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
     }
 
     pub fn scroll_to_top(&mut self) {
-        self.scroll_offset = 0;
-        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        self.navigation_mode = NavigationMode::Navigate;
+        self.selected_index = 0;
+        self.viewport_offset = 0;
+        self.save_tab_state();
     }
 
     pub fn scroll_to_bottom(&mut self) {
+        self.navigation_mode = NavigationMode::Navigate;
         let filtered_logs = self.get_filtered_logs();
         if !filtered_logs.is_empty() {
-            self.scroll_offset = filtered_logs.len().saturating_sub(1);
-            self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+            self.selected_index = filtered_logs.len() - 1;
+            self.ensure_selection_visible();
+            self.save_tab_state();
+        }
+    }
+    
+    pub fn exit_navigation_mode(&mut self) {
+        self.navigation_mode = NavigationMode::Follow;
+        // Go to the latest log
+        let filtered_logs = self.get_filtered_logs();
+        if !filtered_logs.is_empty() {
+            self.selected_index = filtered_logs.len() - 1;
+            self.ensure_selection_visible();
+            self.save_tab_state();
+        }
+    }
+    
+    fn ensure_selection_visible(&mut self) {
+        // This will be called with the viewport height from the UI
+        // For now, we'll just ensure the viewport follows the selection
+        // The actual viewport adjustment will happen in get_visible_logs_with_selection
+    }
+    
+    fn save_tab_state(&mut self) {
+        if let Some(state) = self.tab_states.get_mut(&self.active_tab) {
+            state.selected_index = self.selected_index;
+            state.viewport_offset = self.viewport_offset;
+            state.navigation_mode = self.navigation_mode;
         }
     }
 
@@ -143,11 +217,62 @@ impl App {
         // Called periodically for any time-based updates
     }
 
+    pub fn prepare_viewport(&mut self, height: usize) {
+        let filtered_count = self.get_filtered_logs().len();
+        
+        if filtered_count == 0 {
+            self.selected_index = 0;
+            self.viewport_offset = 0;
+            return;
+        }
+        
+        // Ensure selected index is valid
+        if self.selected_index >= filtered_count {
+            self.selected_index = filtered_count.saturating_sub(1);
+        }
+        
+        // Calculate viewport to keep selection visible
+        if height > 0 {
+            // If selection is above viewport, scroll up
+            if self.selected_index < self.viewport_offset {
+                self.viewport_offset = self.selected_index;
+            }
+            // If selection is below viewport, scroll down
+            else if self.selected_index >= self.viewport_offset + height {
+                self.viewport_offset = self.selected_index.saturating_sub(height - 1);
+            }
+        }
+    }
+    
     pub fn get_visible_logs(&self, height: usize) -> Vec<&LogEntry> {
         let filtered_logs = self.get_filtered_logs();
-        let start = self.scroll_offset;
+        
+        if filtered_logs.is_empty() || height == 0 {
+            return vec![];
+        }
+        
+        // Ensure viewport_offset is valid
+        let start = self.viewport_offset.min(filtered_logs.len().saturating_sub(1));
+        
+        // Get visible range, limited by height
         let end = (start + height).min(filtered_logs.len());
         filtered_logs[start..end].to_vec()
+    }
+    
+    pub fn get_relative_selection(&self, height: usize) -> Option<usize> {
+        let filtered_logs = self.get_filtered_logs();
+        if filtered_logs.is_empty() {
+            return None;
+        }
+        
+        let end = (self.viewport_offset + height).min(filtered_logs.len());
+        
+        // Calculate relative selection position within viewport
+        if self.selected_index >= self.viewport_offset && self.selected_index < end {
+            Some(self.selected_index - self.viewport_offset)
+        } else {
+            None
+        }
     }
     
     pub fn get_filtered_logs(&self) -> Vec<&LogEntry> {
@@ -170,19 +295,26 @@ impl App {
     }
     
     pub fn switch_tab(&mut self, tab: TabType) {
-        // Save current scroll position
-        self.tab_scroll_offsets.insert(self.active_tab, self.scroll_offset);
+        // Save current state
+        self.save_tab_state();
         
         // Switch to new tab
         self.active_tab = tab;
         
-        // Restore scroll position for new tab
-        self.scroll_offset = *self.tab_scroll_offsets.get(&tab).unwrap_or(&0);
+        // Restore state for new tab
+        if let Some(state) = self.tab_states.get(&tab) {
+            self.selected_index = state.selected_index;
+            self.viewport_offset = state.viewport_offset;
+            self.navigation_mode = state.navigation_mode;
+        }
         
-        // Ensure scroll offset is valid for the filtered logs
+        // Ensure indices are valid for the filtered logs
         let filtered_count = self.get_filtered_logs().len();
-        if self.scroll_offset >= filtered_count {
-            self.scroll_offset = filtered_count.saturating_sub(1);
+        if filtered_count == 0 {
+            self.selected_index = 0;
+            self.viewport_offset = 0;
+        } else if self.selected_index >= filtered_count {
+            self.selected_index = filtered_count - 1;
         }
     }
     
@@ -248,9 +380,9 @@ impl App {
     // Log selection methods
     pub fn select_log_at_cursor(&mut self) {
         let filtered_logs = self.get_filtered_logs();
-        if !filtered_logs.is_empty() && self.scroll_offset < filtered_logs.len() {
+        if !filtered_logs.is_empty() && self.selected_index < filtered_logs.len() {
             // Find the index of the selected log in the full logs vector
-            let selected_log = filtered_logs[self.scroll_offset];
+            let selected_log = filtered_logs[self.selected_index];
             if let Some(index) = self.logs.iter().position(|log| std::ptr::eq(log, selected_log)) {
                 self.selected_log_index = Some(index);
             }
