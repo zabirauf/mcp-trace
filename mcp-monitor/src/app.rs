@@ -21,6 +21,8 @@ pub enum TabType {
 pub enum NavigationMode {
     Follow,     // Automatically follow latest log
     Navigate,   // Manual navigation with selection
+    Search,     // Search mode with filtering
+    SearchResults, // Navigating search results (no dialog)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -44,6 +46,9 @@ pub struct App {
     pub detail_word_wrap: bool,
     pub detail_scroll_offset: u16, // Vertical scroll offset for detail view
     pub navigation_mode: NavigationMode,
+    pub search_query: String,
+    pub search_results: Vec<usize>, // Indices of matching logs in the main logs vector
+    pub search_cursor: usize, // Current cursor position in search input
 }
 
 #[derive(Debug, Clone)]
@@ -76,6 +81,9 @@ impl App {
             detail_word_wrap: true,
             detail_scroll_offset: 0,
             navigation_mode: NavigationMode::Follow,
+            search_query: String::new(),
+            search_results: Vec::new(),
+            search_cursor: 0,
         }
     }
 
@@ -112,7 +120,7 @@ impl App {
 
                 // In follow mode, automatically select the latest log
                 if self.navigation_mode == NavigationMode::Follow {
-                    let filtered_logs = self.get_filtered_logs();
+                    let filtered_logs = self.get_search_filtered_logs();
                     if !filtered_logs.is_empty() {
                         self.selected_index = filtered_logs.len() - 1;
                     }
@@ -146,7 +154,9 @@ impl App {
     }
 
     pub fn scroll_up(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
         if self.selected_index > 0 {
             self.selected_index -= 1;
             self.ensure_selection_visible();
@@ -155,8 +165,10 @@ impl App {
     }
 
     pub fn scroll_down(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
-        let filtered_count = self.get_filtered_logs().len();
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
+        let filtered_count = self.get_search_filtered_logs().len();
         if filtered_count > 0 && self.selected_index < filtered_count - 1 {
             self.selected_index += 1;
             self.ensure_selection_visible();
@@ -165,7 +177,9 @@ impl App {
     }
 
     pub fn page_up(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
         let page_size = 10;
         self.selected_index = self.selected_index.saturating_sub(page_size);
         self.ensure_selection_visible();
@@ -173,9 +187,11 @@ impl App {
     }
 
     pub fn page_down(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
         let page_size = 10;
-        let filtered_count = self.get_filtered_logs().len();
+        let filtered_count = self.get_search_filtered_logs().len();
         if filtered_count > 0 {
             self.selected_index = (self.selected_index + page_size).min(filtered_count - 1);
             self.ensure_selection_visible();
@@ -184,15 +200,19 @@ impl App {
     }
 
     pub fn scroll_to_top(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
         self.selected_index = 0;
         self.viewport_offset = 0;
         self.save_tab_state();
     }
 
     pub fn scroll_to_bottom(&mut self) {
-        self.navigation_mode = NavigationMode::Navigate;
-        let filtered_logs = self.get_filtered_logs();
+        if self.navigation_mode == NavigationMode::Follow {
+            self.navigation_mode = NavigationMode::Navigate;
+        }
+        let filtered_logs = self.get_search_filtered_logs();
         if !filtered_logs.is_empty() {
             self.selected_index = filtered_logs.len() - 1;
             self.ensure_selection_visible();
@@ -201,13 +221,17 @@ impl App {
     }
     
     pub fn exit_navigation_mode(&mut self) {
-        self.navigation_mode = NavigationMode::Follow;
-        // Go to the latest log
-        let filtered_logs = self.get_filtered_logs();
-        if !filtered_logs.is_empty() {
-            self.selected_index = filtered_logs.len() - 1;
-            self.ensure_selection_visible();
-            self.save_tab_state();
+        if self.navigation_mode == NavigationMode::Search || self.navigation_mode == NavigationMode::SearchResults {
+            self.exit_search_mode();
+        } else {
+            self.navigation_mode = NavigationMode::Follow;
+            // Go to the latest log
+            let filtered_logs = self.get_search_filtered_logs();
+            if !filtered_logs.is_empty() {
+                self.selected_index = filtered_logs.len() - 1;
+                self.ensure_selection_visible();
+                self.save_tab_state();
+            }
         }
     }
     
@@ -286,7 +310,7 @@ impl App {
     }
 
     pub fn prepare_viewport(&mut self, height: usize) {
-        let filtered_count = self.get_filtered_logs().len();
+        let filtered_count = self.get_search_filtered_logs().len();
         
         if filtered_count == 0 {
             self.selected_index = 0;
@@ -313,7 +337,7 @@ impl App {
     }
     
     pub fn get_visible_logs(&self, height: usize) -> Vec<&LogEntry> {
-        let filtered_logs = self.get_filtered_logs();
+        let filtered_logs = self.get_search_filtered_logs();
         
         if filtered_logs.is_empty() || height == 0 {
             return vec![];
@@ -328,7 +352,7 @@ impl App {
     }
     
     pub fn get_relative_selection(&self, height: usize) -> Option<usize> {
-        let filtered_logs = self.get_filtered_logs();
+        let filtered_logs = self.get_search_filtered_logs();
         if filtered_logs.is_empty() {
             return None;
         }
@@ -447,7 +471,7 @@ impl App {
     
     // Log selection methods
     pub fn select_log_at_cursor(&mut self) {
-        let filtered_logs = self.get_filtered_logs();
+        let filtered_logs = self.get_search_filtered_logs();
         if !filtered_logs.is_empty() && self.selected_index < filtered_logs.len() {
             // Find the index of the selected log in the full logs vector
             let selected_log = filtered_logs[self.selected_index];
@@ -567,5 +591,147 @@ impl App {
         }
         
         cleaned
+    }
+    
+    // Search mode methods
+    pub fn enter_search_mode(&mut self) {
+        self.navigation_mode = NavigationMode::Search;
+        self.search_query.clear();
+        self.search_results.clear();
+        self.search_cursor = 0;
+        self.selected_index = 0;
+        self.viewport_offset = 0;
+    }
+    
+    pub fn exit_search_mode(&mut self) {
+        self.navigation_mode = NavigationMode::Navigate;
+        self.search_query.clear();
+        self.search_results.clear();
+        self.search_cursor = 0;
+        
+        // Return to regular filtered view
+        let filtered_logs = self.get_filtered_logs();
+        if !filtered_logs.is_empty() {
+            self.selected_index = filtered_logs.len() - 1;
+            self.ensure_selection_visible();
+        }
+        self.save_tab_state();
+    }
+    
+    pub fn confirm_search_results(&mut self) {
+        // Switch to SearchResults mode to keep the search results visible
+        self.navigation_mode = NavigationMode::SearchResults;
+        self.search_cursor = 0;
+        
+        // Keep the current selection and viewport
+        self.save_tab_state();
+    }
+    
+    pub fn search_input_char(&mut self, c: char) {
+        if self.navigation_mode == NavigationMode::Search {
+            self.search_query.insert(self.search_cursor, c);
+            self.search_cursor += 1;
+            self.update_search_results();
+        }
+    }
+    
+    pub fn search_backspace(&mut self) {
+        if self.navigation_mode == NavigationMode::Search && self.search_cursor > 0 {
+            self.search_cursor -= 1;
+            self.search_query.remove(self.search_cursor);
+            self.update_search_results();
+        }
+    }
+    
+    pub fn search_delete(&mut self) {
+        if self.navigation_mode == NavigationMode::Search && self.search_cursor < self.search_query.len() {
+            self.search_query.remove(self.search_cursor);
+            self.update_search_results();
+        }
+    }
+    
+    pub fn search_cursor_left(&mut self) {
+        if self.navigation_mode == NavigationMode::Search && self.search_cursor > 0 {
+            self.search_cursor -= 1;
+        }
+    }
+    
+    pub fn search_cursor_right(&mut self) {
+        if self.navigation_mode == NavigationMode::Search && self.search_cursor < self.search_query.len() {
+            self.search_cursor += 1;
+        }
+    }
+    
+    pub fn search_cursor_home(&mut self) {
+        if self.navigation_mode == NavigationMode::Search {
+            self.search_cursor = 0;
+        }
+    }
+    
+    pub fn search_cursor_end(&mut self) {
+        if self.navigation_mode == NavigationMode::Search {
+            self.search_cursor = self.search_query.len();
+        }
+    }
+    
+    fn update_search_results(&mut self) {
+        self.search_results.clear();
+        
+        if self.search_query.is_empty() {
+            self.selected_index = 0;
+            self.viewport_offset = 0;
+            return;
+        }
+        
+        let query_lower = self.search_query.to_lowercase();
+        
+        // Find matching log indices
+        for (index, log) in self.logs.iter().enumerate() {
+            // Apply proxy filter if any
+            if let Some(ref selected_proxy) = self.selected_proxy {
+                if &log.proxy_id != selected_proxy {
+                    continue;
+                }
+            }
+            
+            // Apply tab filter
+            let matches_tab = match self.active_tab {
+                TabType::All => true,
+                TabType::Messages => matches!(log.level, LogLevel::Request | LogLevel::Response),
+                TabType::Errors => matches!(log.level, LogLevel::Error | LogLevel::Warning),
+                TabType::System => matches!(log.level, LogLevel::Info | LogLevel::Debug),
+            };
+            
+            if !matches_tab {
+                continue;
+            }
+            
+            // Check if log matches search query (case-insensitive)
+            let message_matches = log.message.to_lowercase().contains(&query_lower);
+            let proxy_name_matches = self.proxies
+                .get(&log.proxy_id)
+                .map(|p| p.name.to_lowercase().contains(&query_lower))
+                .unwrap_or(false);
+            let level_matches = format!("{:?}", log.level).to_lowercase().contains(&query_lower);
+            
+            if message_matches || proxy_name_matches || level_matches {
+                self.search_results.push(index);
+            }
+        }
+        
+        // Reset selection to first result
+        self.selected_index = 0;
+        self.viewport_offset = 0;
+    }
+    
+    pub fn get_search_filtered_logs(&self) -> Vec<&LogEntry> {
+        if self.navigation_mode == NavigationMode::Search || self.navigation_mode == NavigationMode::SearchResults {
+            self.search_results
+                .iter()
+                .filter_map(|&index| self.logs.get(index))
+                .collect()
+        } else {
+            self.get_filtered_logs()
+        }
     }
 }

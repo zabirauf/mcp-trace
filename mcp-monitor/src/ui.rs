@@ -47,6 +47,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.show_detail_view {
         draw_detail_view(f, app, size);
     }
+    
+    // Draw search dialog overlay if in search mode
+    if app.navigation_mode == NavigationMode::Search {
+        draw_search_dialog(f, app, size);
+    }
 }
 
 fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
@@ -210,7 +215,7 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
     // Get data for rendering
     let visible_logs = app.get_visible_logs(visible_height);
     let relative_selection = app.get_relative_selection(visible_height);
-    let filtered_count = app.get_filtered_logs().len();
+    let filtered_count = app.get_search_filtered_logs().len();
     let display_position = if filtered_count > 0 { app.selected_index + 1 } else { 0 };
     
     let items: Vec<ListItem> = visible_logs
@@ -265,6 +270,8 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
     let (mode_text, mode_color) = match app.navigation_mode {
         NavigationMode::Follow => ("FOLLOW", Color::Green),
         NavigationMode::Navigate => ("NAVIGATE", Color::Yellow),
+        NavigationMode::Search => ("SEARCH", Color::Cyan),
+        NavigationMode::SearchResults => ("SEARCH RESULTS", Color::Magenta),
     };
     
     // Create focus indicator for logs
@@ -284,12 +291,19 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
         String::new()
     };
     
+    // Add search query to title if in search results mode
+    let search_text = if app.navigation_mode == NavigationMode::SearchResults && !app.search_query.is_empty() {
+        format!(" | Search: \"{}\"", app.search_query)
+    } else {
+        String::new()
+    };
+    
     let logs_list = List::new(items)
         .block(
             Block::default()
                 .borders(Borders::ALL)
                 .title(Title::from(logs_title).alignment(Alignment::Center))
-                .title(Title::from(Span::styled(format!("[{}]{}", mode_text, proxy_filter_text), Style::default().fg(mode_color).add_modifier(Modifier::BOLD))).alignment(Alignment::Left))
+                .title(Title::from(Span::styled(format!("[{}]{}{}", mode_text, proxy_filter_text, search_text), Style::default().fg(mode_color).add_modifier(Modifier::BOLD))).alignment(Alignment::Left))
                 .title(Title::from(format!("({}/{}) [Enter: View Details] | →: Focus here", display_position, filtered_count)).alignment(Alignment::Right).position(block::Position::Bottom))
                 .border_set(border::ROUNDED),
         )
@@ -304,7 +318,7 @@ fn draw_logs(f: &mut Frame, app: &mut App, area: Rect) {
 
 fn draw_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
-        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ←→: Switch focus | ↑↓: Navigate | Esc: Follow/Clear filter | Enter: Select"),
+        Line::from("q/Ctrl+C: Quit | c: Clear logs | r: Refresh | ←→: Switch focus | ↑↓: Navigate | Esc: Follow/Clear filter | Enter: Select | /: Search"),
         Line::from("Tab/Shift+Tab: Switch tabs | 1-4: Direct tab selection | PgUp/PgDn: Page | Home/End: Top/Bottom"),
     ];
 
@@ -452,4 +466,81 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(popup_layout[1])[1]
+}
+
+fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
+    // Create a smaller centered dialog for search
+    let dialog_area = centered_rect(60, 20, area);
+    
+    // Clear the background
+    let clear = Clear;
+    f.render_widget(clear, dialog_area);
+    
+    // Create layout for the dialog
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Min(0)])
+        .split(dialog_area);
+    
+    // Search input field
+    let search_input = format!("Search: {}", app.search_query);
+    let search_paragraph = Paragraph::new(search_input.clone())
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Search Logs")
+                .border_set(border::ROUNDED),
+        )
+        .style(Style::default().fg(Color::White));
+    
+    // Results info
+    let results_count = app.search_results.len();
+    let results_text = if app.search_query.is_empty() {
+        "Type to search...".to_string()
+    } else if results_count == 0 {
+        "No results found".to_string()
+    } else {
+        format!("{} result{} found", results_count, if results_count == 1 { "" } else { "s" })
+    };
+    
+    let results_paragraph = Paragraph::new(results_text)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Results")
+                .border_set(border::ROUNDED),
+        )
+        .style(Style::default().fg(Color::Gray));
+    
+    // Instructions
+    let instructions = vec![
+        Line::from("ESC: Exit search | Enter: Navigate to results | ↑↓: Navigate results"),
+        Line::from("Type to filter logs by message, proxy name, or log level"),
+    ];
+    
+    let instructions_paragraph = Paragraph::new(instructions)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Instructions")
+                .border_set(border::ROUNDED),
+        )
+        .style(Style::default().fg(Color::Gray))
+        .alignment(Alignment::Center);
+    
+    f.render_widget(search_paragraph, chunks[0]);
+    f.render_widget(results_paragraph, chunks[1]);
+    f.render_widget(instructions_paragraph, chunks[2]);
+    
+    // Set cursor position in the search input
+    if !app.search_query.is_empty() || app.search_cursor > 0 {
+        let cursor_x = chunks[0].x + 9 + app.search_cursor as u16; // "Search: " = 8 chars + 1 for border
+        let cursor_y = chunks[0].y + 1; // 1 for top border
+        f.set_cursor(cursor_x, cursor_y);
+    } else {
+        // Position cursor after "Search: "
+        let cursor_x = chunks[0].x + 9; // "Search: " = 8 chars + 1 for border
+        let cursor_y = chunks[0].y + 1; // 1 for top border
+        f.set_cursor(cursor_x, cursor_y);
+    }
 }

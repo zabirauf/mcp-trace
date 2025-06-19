@@ -14,7 +14,7 @@ use tokio::sync::mpsc;
 mod app;
 mod ui;
 
-use app::{App, AppEvent, TabType, FocusArea};
+use app::{App, AppEvent, TabType, FocusArea, NavigationMode};
 
 pub struct MonitorArgs {
     pub ipc_socket: String,
@@ -168,6 +168,27 @@ async fn run_app<B: Backend>(
                             KeyCode::End => app.detail_scroll_offset = 1000, // Large number to scroll to bottom
                             _ => {}
                         }
+                    } else if app.navigation_mode == NavigationMode::Search {
+                        // Handle search mode keyboard events
+                        match key.code {
+                            KeyCode::Esc => app.exit_search_mode(),
+                            KeyCode::Char(c) => app.search_input_char(c),
+                            KeyCode::Backspace => app.search_backspace(),
+                            KeyCode::Delete => app.search_delete(),
+                            KeyCode::Left => app.search_cursor_left(),
+                            KeyCode::Right => app.search_cursor_right(),
+                            KeyCode::Home => app.search_cursor_home(),
+                            KeyCode::End => app.search_cursor_end(),
+                            KeyCode::Up => app.scroll_up(),
+                            KeyCode::Down => app.scroll_down(),
+                            KeyCode::PageUp => app.page_up(),
+                            KeyCode::PageDown => app.page_down(),
+                            KeyCode::Enter => {
+                                // Confirm search results and switch to navigate mode while keeping results
+                                app.confirm_search_results();
+                            },
+                            _ => {}
+                        }
                     } else {
                         // Handle main view keyboard events
                         match key.code {
@@ -221,6 +242,11 @@ async fn run_app<B: Backend>(
                             KeyCode::Char('2') => app.switch_tab(TabType::Messages),
                             KeyCode::Char('3') => app.switch_tab(TabType::Errors),
                             KeyCode::Char('4') => app.switch_tab(TabType::System),
+                            KeyCode::Char('/') => {
+                                if app.focus_area == FocusArea::LogView {
+                                    app.enter_search_mode();
+                                }
+                            },
                             KeyCode::Enter => {
                                 match app.focus_area {
                                     FocusArea::ProxyList => app.select_current_proxy(),
