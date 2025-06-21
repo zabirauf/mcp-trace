@@ -1,229 +1,266 @@
-# MCP Proxy TUI (Rust)
+# MCP Probe
 
-A Terminal User Interface (TUI) for monitoring and proxying Model Context Protocol (MCP) servers, built with Rust and Ratatui.
+A powerful Terminal User Interface (TUI) for monitoring and debugging Model Context Protocol (MCP) servers in real-time. Built with Rust and designed for MCP developers who need deep visibility into their server implementations.
 
-## Architecture
+## Why MCP Probe?
 
-This project consists of two main components:
+Developing MCP servers can be challenging when you can't see what's happening under the hood. MCP Probe solves this by providing:
 
-### 1. MCP Proxy (`mcp-proxy`)
-- **Purpose**: Acts as a transparent STDIO proxy for MCP servers
-- **Functionality**:
-  - Intercepts and logs all JSON-RPC communication
-  - Forwards requests/responses between client and MCP server
-  - Sends real-time logs and statistics to the monitor
-  - Supports any STDIO-based MCP server
+- **Real-time monitoring** of all JSON-RPC communication between clients and servers
+- **Multiple server tracking** - monitor several MCP servers simultaneously
+- **Request/response analysis** with detailed statistics and error tracking
+- **Zero-configuration setup** - works with any STDIO-based MCP server
+- **Beautiful TUI interface** with syntax highlighting and intuitive navigation
 
-### 2. MCP Monitor (`mcp-monitor`)
-- **Purpose**: TUI for monitoring multiple MCP proxies
-- **Functionality**:
-  - Real-time display of logs from all connected proxies
-  - Statistics dashboard (requests, errors, data transfer)
-  - Proxy status monitoring
-  - Log filtering and scrolling
-
-### Communication
-- **IPC**: Unix domain sockets for proxy ↔ monitor communication
-- **Protocol**: JSON-serialized structured messages
-- **Transport**: Line-delimited JSON over async streams
+Perfect for:
+- **Learning MCP** by observing real communication flows
+- **MCP server developers** debugging their implementations
 
 ## Quick Start
 
 ### Using Docker (Recommended)
 
 ```bash
-# Start the monitor TUI
+# Clone the repository
+git clone https://github.com/zabirauf/mcp-probe
+cd mcp-probe
+
+# Start the monitoring interface
 ./run.sh monitor
 
-# In another terminal, start a proxy with your MCP server
+# In another terminal, start monitoring your MCP server
 ./run.sh proxy python your_mcp_server.py
-
-# Or start multiple proxies
-./run.sh proxy node mcp-server.js
-./run.sh proxy ./my-binary-server --config config.json
 ```
 
-### Manual Build
+### Install from Source
 
 ```bash
-# Build all binaries
+# Build the project
 cargo build --release
 
-# Start monitor
-./target/release/mcp-monitor --verbose
+# Start the monitor
+./target/release/mcp-monitor
 
-# Start proxy (in another terminal)
-./target/release/mcp-proxy --name "My Server" --command python server.py --verbose
+# Start monitoring your server (in another terminal)
+./target/release/mcp-proxy --name "My Server" --command python your_server.py
 ```
 
 ## Usage Examples
 
-### Running with Python MCP Server
+### Python MCP Server
 
 ```bash
-# Start monitor
+# Monitor a Python MCP server
+./run.sh proxy python -m my_mcp_package.server
+
+# With arguments
+./run.sh proxy python server.py --config config.json --port 8080
+```
+
+### Node.js MCP Server
+
+```bash
+# Monitor a Node.js MCP server
+./run.sh proxy node dist/server.js
+
+# With npm script
+./run.sh proxy npm run start:mcp
+```
+
+### Binary MCP Server
+
+```bash
+# Monitor a compiled binary server
+./run.sh proxy ./my-mcp-server --verbose
+
+# With custom configuration
+./run.sh proxy ./server --config /path/to/config.toml
+```
+
+### Multiple Servers
+
+Monitor multiple MCP servers simultaneously:
+
+```bash
+# Terminal 1: Start monitor
 ./run.sh monitor
 
-# Start proxy for Python server
-./run.sh proxy python -m my_mcp_package.server
+# Terminal 2: Start first server
+./run.sh proxy python server1.py
+
+# Terminal 3: Start second server  
+./run.sh proxy node server2.js
+
+# Terminal 4: Start third server
+./run.sh proxy ./binary-server --config prod.json
 ```
 
-### Running with Node.js MCP Server
+## TUI Interface
+
+### Main View
+- **Left Panel**: List of connected servers with status indicators
+- **Right Panel**: Real-time log viewer with JSON syntax highlighting
+- **Bottom Panel**: Statistics dashboard and help text
+
+### Navigation
+- `q` - Quit the application
+- `c` - Clear all logs
+- `r` - Refresh connections
+- `↑/↓` - Scroll through logs
+- `PgUp/PgDn` - Page up/down
+- `Home/End` - Jump to top/bottom
+- `Tab` - Switch between panels
+
+### Status Indicators
+- 🟢 **Connected** - Server is running and responding
+- 🟡 **Starting** - Server is initializing
+- 🔴 **Error** - Server encountered an error
+- ⚫ **Disconnected** - Server is not responding
+
+## Command Reference
+
+### mcp-probe monitor
+
+Start the monitoring TUI interface.
 
 ```bash
-# Start proxy for Node.js server
-./run.sh proxy node dist/index.js
+mcp-probe monitor [OPTIONS]
+
+Options:
+  -v, --verbose                 Enable verbose logging
+  -s, --socket <PATH>          Custom IPC socket path
+  -h, --help                   Show help information
 ```
 
-### Running with Binary MCP Server
+### mcp-probe proxy
+
+Start monitoring an MCP server.
 
 ```bash
-# Start proxy for compiled binary
-./run.sh proxy ./my-mcp-server --config server-config.json
+mcp-probe proxy [OPTIONS] <COMMAND>
+
+Arguments:
+  <COMMAND>                    Command to start your MCP server
+
+Options:
+  -n, --name <NAME>           Display name for this server
+  -s, --socket <PATH>         IPC socket path to connect to monitor
+  -v, --verbose               Enable verbose logging
+  -h, --help                  Show help information
+
+Examples:
+  mcp-probe proxy python server.py
+  mcp-probe proxy --name "File Server" node dist/file-server.js
+  mcp-probe proxy --verbose ./my-binary-server --config config.json
 ```
 
-## TUI Controls
+## What You'll See
 
-- `q`: Quit the monitor
-- `c`: Clear all logs
-- `r`: Refresh proxy connections
-- `↑/↓`: Scroll through logs
-- `PgUp/PgDn`: Page up/down through logs
-- `Home/End`: Jump to top/bottom of logs
+### Request/Response Logging
+Every JSON-RPC message is captured and displayed with:
+- Timestamp and direction (→ outgoing, ← incoming)
+- Method names and IDs for easy tracking
+- Full JSON payloads with syntax highlighting
+- Error messages and stack traces
 
+### Statistics Dashboard
+- **Total Requests** - Number of requests processed
+- **Success Rate** - Percentage of successful requests
+- **Average Response Time** - Performance metrics
+- **Data Transfer** - Bytes sent/received
+- **Active Connections** - Current client connections
+
+### Error Tracking
+- Real-time error highlighting
+- Stack trace preservation
+- Error categorization (client vs server errors)
+- Request/response correlation for debugging
+
+## Installation
+
+### Prerequisites
+- Rust 1.70+ (if building from source)
+- Docker (for containerized usage)
+- Your MCP server implementation
+
+### From Source
+```bash
+git clone https://github.com/zabirauf/mcp-probe
+cd mcp-probe
+cargo install --path .
+```
 ## Configuration
 
-### MCP Proxy Options
+### Environment Variables
+- `RUST_LOG` - Set logging level (debug, info, warn, error)
+- `MCP_SOCKET_PATH` - Custom IPC socket location
+- `TERM` - Terminal type (recommended: xterm-256color)
+
+### Socket Configuration
+By default, MCP Probe uses Unix domain sockets at `/tmp/mcp-monitor.sock`. You can customize this:
 
 ```bash
-mcp-proxy [OPTIONS] --command <COMMAND>...
-
-Options:
-  -c, --command <COMMAND>...     MCP server command to proxy
-  -n, --name <NAME>             Name for this proxy instance [default: mcp-proxy]
-  -i, --ipc-socket <IPC_SOCKET> IPC socket path [default: /tmp/mcp-monitor.sock]
-  -v, --verbose                 Verbose logging
-```
-
-### MCP Monitor Options
-
-```bash
-mcp-monitor [OPTIONS]
-
-Options:
-  -i, --ipc-socket <IPC_SOCKET> IPC socket path [default: /tmp/mcp-monitor.sock]
-  -v, --verbose                 Verbose logging
-```
-
-## Project Structure
-
-```
-tool-mcp-proxy-tui/
-├── mcp-common/          # Shared types and IPC communication
-│   ├── src/
-│   │   ├── types.rs     # Data structures
-│   │   ├── messages.rs  # IPC message protocol
-│   │   ├── ipc.rs       # Unix socket communication
-│   │   └── mcp.rs       # JSON-RPC message handling
-├── mcp-proxy/           # STDIO proxy binary
-│   ├── src/
-│   │   ├── main.rs      # CLI and application entry
-│   │   ├── proxy.rs     # Main proxy logic
-│   │   └── stdio_handler.rs # STDIO communication
-├── mcp-monitor/         # TUI monitor binary
-│   ├── src/
-│   │   ├── main.rs      # TUI application setup
-│   │   ├── app.rs       # Application state and logic
-│   │   └── ui.rs        # Ratatui interface components
-├── Dockerfile           # Multi-stage build
-├── docker-compose.yml   # Service orchestration
-└── run.sh              # Convenience script
-```
-
-## Features
-
-### Proxy Features
-- ✅ STDIO-based MCP server proxying
-- ✅ Real-time JSON-RPC message logging
-- ✅ Request/response statistics tracking
-- ✅ Error handling and process management
-- ✅ IPC communication with monitor
-
-### Monitor Features
-- ✅ Real-time TUI with Ratatui
-- ✅ Multiple proxy monitoring
-- ✅ Scrollable log viewer with syntax highlighting
-- ✅ Statistics dashboard
-- ✅ Proxy status indicators
-- ✅ Keyboard navigation
-
-### Communication
-- ✅ Unix domain socket IPC
-- ✅ Structured JSON message protocol
-- ✅ Async message handling
-- ✅ Connection management
-
-## Development
-
-### Building
-
-```bash
-# Build all workspace members
-cargo build
-
-# Build with optimizations
-cargo build --release
-
-# Run tests
-cargo test
-```
-
-### Docker Development
-
-```bash
-# Build images
-./run.sh build
-
-# View logs
-./run.sh logs
-
-# Clean up
-./run.sh clean
+# Custom socket path
+mcp-probe monitor --socket /custom/path/monitor.sock
+mcp-probe proxy --socket /custom/path/monitor.sock python server.py
 ```
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Monitor not receiving proxy logs**
-   - Ensure both proxy and monitor use the same IPC socket path
-   - Check that `/tmp/mcp-sockets` directory is writable
-   - Verify network connectivity in Docker environment
+**Monitor shows no connections**
+- Ensure both monitor and proxy use the same socket path
+- Check that the socket directory is writable
+- Verify the proxy command is correct
 
-2. **Proxy fails to start MCP server**
-   - Verify the command path and arguments
-   - Check that the MCP server supports STDIO mode
-   - Review proxy logs for detailed error messages
+**Server fails to start**
+- Verify your MCP server command works independently
+- Check that the server supports STDIO mode
+- Review proxy logs with `--verbose` flag
 
-3. **TUI display issues**
-   - Set `TERM=xterm-256color` environment variable
-   - Ensure terminal supports 256 colors
-   - Try running with `--verbose` for debugging
+**TUI display problems**
+- Set `TERM=xterm-256color`
+- Ensure terminal supports 256 colors
+- Try resizing the terminal window
 
-### Logs
+### Debug Mode
+Enable verbose logging to see detailed information:
 
-- **Container logs**: `docker compose logs -f`
-- **File logs**: Check `./logs/` directory
-- **Proxy logs**: Include STDIO communication and errors
-- **Monitor logs**: Include TUI events and IPC messages
+```bash
+RUST_LOG=debug mcp-probe monitor --verbose
+RUST_LOG=debug mcp-probe proxy --verbose python server.py
+```
 
 ## Contributing
 
-1. Follow Rust conventions and use `cargo fmt`
-2. Add tests for new functionality
-3. Update documentation for API changes
-4. Test with multiple MCP server implementations
+We welcome contributions! This project is built with an AI-first approach where Claude and other AI assistants are primary development partners.
+
+### Development Setup
+```bash
+git clone https://github.com/zabirauf/mcp-probe
+cd mcp-probe
+cargo build
+cargo test
+```
+
+### Architecture
+MCP Probe consists of two main components that communicate via IPC:
+- **mcp-probe monitor** - The TUI interface
+- **mcp-probe proxy** - The transparent proxy that intercepts MCP traffic
+
+## AI-First Development
+
+This project embraces AI-assisted development as a core philosophy. We believe that:
+
+- **AI partnerships accelerate development** - Claude and other AI assistants are treated as primary development partners, not just tools
+- **Human creativity + AI efficiency** - Combining human insight with AI's rapid iteration capabilities produces better software faster
+- **Documentation-driven development** - Comprehensive documentation (like CLAUDE.md) enables AI assistants to understand and contribute meaningfully to the codebase
+
+The codebase includes detailed AI-guidance documentation and is structured to be easily understood and extended by AI assistants. We encourage contributors to embrace this collaborative approach and document their code in ways that facilitate AI understanding and contribution.
+
+Future development will continue to leverage AI partnerships for feature development, testing, documentation, and optimization. We see this as the future of open-source development and invite the community to explore and contribute to this paradigm.
 
 ## License
 
-This project follows the same license as the original Python implementation.
+MIT License - see LICENSE file for details.
