@@ -352,22 +352,38 @@ fn format_bytes(bytes: u64) -> String {
     }
 }
 
+
 fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
     // Create a centered popup that covers most of the screen
     let popup_area = centered_rect(90, 85, area);
     
-    // Clear the background
+    // Clear the background completely first
     let clear = Clear;
     f.render_widget(clear, popup_area);
+    
+    // Draw a solid background block to create visual separation
+    let background = Block::default()
+        .borders(Borders::ALL)
+        .border_set(border::DOUBLE)
+        .border_style(Style::default().fg(Color::White))
+        .style(Style::default().bg(Color::Black));
+    f.render_widget(background, popup_area);
     
     if let Some(log) = app.get_selected_log() {
         let content = app.format_log_content(log);
         
-        // Create the main content area
+        // Create the main content area (with margin to avoid overlapping the border)
+        let inner_area = Rect {
+            x: popup_area.x + 1,
+            y: popup_area.y + 1,
+            width: popup_area.width.saturating_sub(2),
+            height: popup_area.height.saturating_sub(2),
+        };
+        
         let chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([Constraint::Length(3), Constraint::Min(0), Constraint::Length(3)])
-            .split(popup_area);
+            .split(inner_area);
         
         // Header with log info
         let header_text = vec![
@@ -390,7 +406,9 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
                 Block::default()
                     .borders(Borders::ALL)
                     .title("Detail View")
-                    .border_set(border::ROUNDED),
+                    .border_set(border::THICK)
+                    .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .style(Style::default().bg(Color::Rgb(20, 20, 20))),
             )
             .style(Style::default().fg(Color::White))
             .alignment(Alignment::Center);
@@ -416,7 +434,9 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
                 Block::default()
                     .borders(Borders::ALL)
                     .title(format!("Content [Word Wrap: {}] [W: Toggle]", wrap_indicator))
-                    .border_set(border::ROUNDED),
+                    .border_set(border::THICK)
+                    .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .style(Style::default().bg(Color::Rgb(20, 20, 20))),
             )
             .style(Style::default().fg(Color::White))
             .wrap(if app.detail_word_wrap { 
@@ -436,9 +456,11 @@ fn draw_detail_view(f: &mut Frame, app: &App, area: Rect) {
                 Block::default()
                     .borders(Borders::ALL)
                     .title("Controls")
-                    .border_set(border::ROUNDED),
+                    .border_set(border::THICK)
+                    .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                    .style(Style::default().bg(Color::Rgb(20, 20, 20))),
             )
-            .style(Style::default().fg(Color::Gray))
+            .style(Style::default().fg(Color::LightCyan))
             .alignment(Alignment::Center);
         
         f.render_widget(header, chunks[0]);
@@ -472,15 +494,30 @@ fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
     // Create a smaller centered dialog for search
     let dialog_area = centered_rect(60, 20, area);
     
-    // Clear the background
+    // Clear the background completely first
     let clear = Clear;
     f.render_widget(clear, dialog_area);
     
-    // Create layout for the dialog
+    // Draw a solid background block to create visual separation
+    let background = Block::default()
+        .borders(Borders::ALL)
+        .border_set(border::DOUBLE)
+        .border_style(Style::default().fg(Color::White))
+        .style(Style::default().bg(Color::Black));
+    f.render_widget(background, dialog_area);
+    
+    // Create layout for the dialog (with margin to avoid overlapping the border)
+    let inner_area = Rect {
+        x: dialog_area.x + 1,
+        y: dialog_area.y + 1,
+        width: dialog_area.width.saturating_sub(2),
+        height: dialog_area.height.saturating_sub(2),
+    };
+    
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Min(0)])
-        .split(dialog_area);
+        .split(inner_area);
     
     // Search input field
     let search_input = format!("Search: {}", app.search_query);
@@ -489,7 +526,9 @@ fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Search Logs")
-                .border_set(border::ROUNDED),
+                .border_set(border::THICK)
+                .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(Color::Rgb(20, 20, 20))),
         )
         .style(Style::default().fg(Color::White));
     
@@ -508,9 +547,11 @@ fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Results")
-                .border_set(border::ROUNDED),
+                .border_set(border::THICK)
+                .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(Color::Rgb(20, 20, 20))),
         )
-        .style(Style::default().fg(Color::Gray));
+        .style(Style::default().fg(Color::LightYellow));
     
     // Instructions
     let instructions = vec![
@@ -523,9 +564,11 @@ fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .borders(Borders::ALL)
                 .title("Instructions")
-                .border_set(border::ROUNDED),
+                .border_set(border::THICK)
+                .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(Color::Rgb(20, 20, 20))),
         )
-        .style(Style::default().fg(Color::Gray))
+        .style(Style::default().fg(Color::LightCyan))
         .alignment(Alignment::Center);
     
     f.render_widget(search_paragraph, chunks[0]);

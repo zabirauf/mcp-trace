@@ -464,6 +464,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "mcp-probe"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "mcp-monitor",
+ "mcp-proxy",
+ "tokio",
+]
+
+[[package]]
 name = "mcp-proxy"
 version = "0.1.0"
 dependencies = [
@@ -478,17 +489,6 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
-]
-
-[[package]]
-name = "mcpdebug"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "mcp-monitor",
- "mcp-proxy",
- "tokio",
 ]
 
 [[package]]

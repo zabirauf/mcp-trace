@@ -34,14 +34,14 @@ python3 test_server.py --fast
 python3 test_client.py
 ```
 
-### 3. Using with mcpdebug
+### 3. Using with mcp-probe
 
 ```bash
 # Start monitor
-mcpdebug monitor
+mcp-probe monitor
 
 # In another terminal, start proxy pointing to test server
-mcpdebug proxy --command "python3 test-mcp-server/test_server.py --fast" --name "TestServer"
+mcp-probe proxy --command "python3 test-mcp-server/test_server.py --fast" --name "TestServer"
 ```
 
 ## Test Server Options

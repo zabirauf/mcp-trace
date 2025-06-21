@@ -1,5 +1,5 @@
 [package]
-name = "mcpdebug"
+name = "mcp-probe"
 version = "0.1.0"
 edition = "2021"
 
