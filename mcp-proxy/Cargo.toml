@@ -19,3 +19,8 @@ clap = { workspace = true }
 uuid = { workspace = true }
 chrono = { workspace = true }
 rand = "0.8"
+
+[dev-dependencies]
+tokio-test = "0.4"
+tempfile = "3.8"
+assert_matches = "1.5"

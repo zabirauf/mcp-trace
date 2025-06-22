@@ -8,6 +8,10 @@ mod buffered_ipc_client;
 
 use proxy::MCPProxy;
 
+// Export modules for testing
+pub use buffered_ipc_client::BufferedIpcClient;
+pub use stdio_handler::StdioHandler;
+
 pub struct ProxyArgs {
     pub command: String,
     pub name: String,

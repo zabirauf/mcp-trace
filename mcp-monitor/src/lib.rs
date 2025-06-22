@@ -14,7 +14,8 @@ use tokio::sync::mpsc;
 mod app;
 mod ui;
 
-use app::{App, AppEvent, TabType, FocusArea, NavigationMode};
+// Export for testing and internal use
+pub use app::{App, AppEvent, TabType, FocusArea, NavigationMode};
 
 pub struct MonitorArgs {
     pub ipc_socket: String,
