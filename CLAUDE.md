@@ -283,6 +283,92 @@ To add new bindings:
 5. **Process issues**: Monitor `docker compose logs -f`
 6. **Build issues**: Use `./run.sh build` for clean Docker builds
 
+## Testing Guidelines
+
+### Test Structure
+
+The project follows standard Rust testing conventions:
+
+#### Individual Crate Tests
+- **`mcp-common/tests/`** - Unit and integration tests for common library (73 tests)
+  - `types_tests.rs` - Data structure validation
+  - `messages_tests.rs` - IPC message serialization
+  - `mcp_tests.rs` - JSON-RPC protocol handling
+  - `ipc_tests.rs` - IPC client/server functionality
+  - `ipc_integration_tests.rs` - Full IPC communication scenarios
+  
+- **`mcp-proxy/tests/`** - Unit tests for proxy functionality (13 tests)
+  - `buffered_ipc_client_tests.rs` - Buffered client with reconnection
+  - `stdio_handler_tests.rs` - STDIO communication handling
+  
+- **`mcp-monitor/tests/`** - Unit tests for monitor app logic (16 tests)
+  - `app_tests.rs` - Application state management and UI logic
+
+#### Workspace-Level E2E Tests
+- **`tests/`** - End-to-end system integration tests
+  - `e2e/full_system_tests.rs` - Complete proxy-monitor scenarios
+
+### Running Tests
+
+```bash
+# Run all tests
+cargo test
+
+# Run tests for specific crate
+cargo test -p mcp-common
+cargo test -p mcp-proxy  
+cargo test -p mcp-monitor
+
+# Run only E2E tests
+cargo test --test e2e_tests
+
+# Run with output for debugging
+cargo test -- --nocapture
+```
+
+### Adding New Tests
+
+#### Unit Tests
+Add tests to the appropriate crate's `tests/` directory:
+
+```rust
+// mcp-common/tests/new_feature_tests.rs
+use mcp_common::*;
+
+#[test]
+fn test_new_feature() {
+    let result = new_function();
+    assert_eq!(result, expected_value);
+}
+```
+
+#### Integration Tests
+Add to existing integration test files or create new ones in `mcp-common/tests/`:
+
+```rust
+#[tokio::test]
+async fn test_new_integration_scenario() {
+    // Test multiple components working together
+}
+```
+
+#### E2E Tests
+Add to `tests/e2e/full_system_tests.rs` for complete system scenarios:
+
+```rust
+#[tokio::test]
+async fn test_new_end_to_end_scenario() {
+    // Test complete proxy + monitor interaction
+}
+```
+
+### Test Coverage
+- **102 total tests** across all crates
+- **Core functionality**: Types, serialization, protocol handling
+- **IPC communication**: Client/server, reconnection, error handling
+- **Application logic**: State management, filtering, search
+- **System integration**: Full proxy-monitor workflows
+
 ## Future Enhancement Areas
 
 ### WebSocket Support
@@ -306,6 +392,7 @@ To add new bindings:
 - Add statistics export functionality
 
 ### Testing Infrastructure
-- Add unit tests for core functionality
-- Implement integration tests with mock MCP servers
+- ✅ Unit tests for core functionality (102 tests across all crates)
+- ✅ Integration tests with mock MCP servers  
+- ✅ End-to-end tests for full system scenarios
 - Add property-based testing for IPC protocol

@@ -17,7 +17,7 @@ impl Default for ProxyId {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum LogLevel {
     Debug,
     Info,
