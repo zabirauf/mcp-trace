@@ -23,3 +23,8 @@ chrono = { version = "0.4", features = ["serde"] }
 ratatui = "0.24"
 crossterm = "0.27"
 
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"
+

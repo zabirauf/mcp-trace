@@ -2,6 +2,17 @@
 name = "mcp-probe"
 version = "0.1.0"
 edition = "2021"
+description = "Terminal UI for monitoring Model Context Protocol (MCP) server traffic"
+authors = ["ML Curious"]
+license = "MIT"
+homepage = "https://github.com/ml-curious/mcp-probe"
+repository = "https://github.com/ml-curious/mcp-probe"
+readme = "../README.md"
+keywords = ["mcp", "debug", "monitor", "tui", "proxy"]
+categories = ["command-line-utilities", "development-tools::debugging"]
+
+[package.metadata.dist]
+dist = true
 
 [dependencies]
 clap = { workspace = true }
