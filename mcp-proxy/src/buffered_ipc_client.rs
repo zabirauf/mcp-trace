@@ -15,6 +15,7 @@ pub struct BufferedIpcClient {
     buffer: Arc<Mutex<VecDeque<IpcMessage>>>,
     sender: mpsc::Sender<IpcMessage>,
     shutdown_tx: Option<mpsc::Sender<()>>,
+    task_handle: Option<tokio::task::JoinHandle<()>>,
 }
 
 impl BufferedIpcClient {
@@ -23,19 +24,20 @@ impl BufferedIpcClient {
         let (sender, receiver) = mpsc::channel(1000);
         let (shutdown_tx, shutdown_rx) = mpsc::channel(1);
         
-        let client = Self {
-            buffer: buffer.clone(),
-            sender,
-            shutdown_tx: Some(shutdown_tx),
-        };
-        
         // Start the background task
-        tokio::spawn(Self::run_client_task(
+        let task_handle = tokio::spawn(Self::run_client_task(
             socket_path,
-            buffer,
+            buffer.clone(),
             receiver,
             shutdown_rx,
         ));
+        
+        let client = Self {
+            buffer,
+            sender,
+            shutdown_tx: Some(shutdown_tx),
+            task_handle: Some(task_handle),
+        };
         
         client
     }
@@ -150,6 +152,11 @@ impl BufferedIpcClient {
         if let Some(shutdown_tx) = self.shutdown_tx.take() {
             let _ = shutdown_tx.send(()).await;
         }
+        
+        // Wait for the background task to complete
+        if let Some(handle) = self.task_handle.take() {
+            let _ = handle.await;
+        }
     }
 }
 
@@ -157,6 +164,11 @@ impl Drop for BufferedIpcClient {
     fn drop(&mut self) {
         if let Some(shutdown_tx) = self.shutdown_tx.take() {
             let _ = shutdown_tx.try_send(());
+        }
+        
+        // Abort the background task to ensure test cleanup
+        if let Some(handle) = self.task_handle.take() {
+            handle.abort();
         }
     }
 }
