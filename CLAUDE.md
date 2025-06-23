@@ -363,7 +363,6 @@ async fn test_new_end_to_end_scenario() {
 ```
 
 ### Test Coverage
-- **102 total tests** across all crates
 - **Core functionality**: Types, serialization, protocol handling
 - **IPC communication**: Client/server, reconnection, error handling
 - **Application logic**: State management, filtering, search
