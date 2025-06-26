@@ -49,6 +49,7 @@ pub struct App {
     pub search_query: String,
     pub search_results: Vec<usize>, // Indices of matching logs in the main logs vector
     pub search_cursor: usize, // Current cursor position in search input
+    pub show_help_dialog: bool, // Whether to show the help dialog
 }
 
 #[derive(Debug, Clone)]
@@ -84,6 +85,7 @@ impl App {
             search_query: String::new(),
             search_results: Vec::new(),
             search_cursor: 0,
+            show_help_dialog: false,
         }
     }
 
