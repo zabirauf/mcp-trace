@@ -52,6 +52,11 @@ pub fn draw(f: &mut Frame, app: &mut App) {
     if app.navigation_mode == NavigationMode::Search {
         draw_search_dialog(f, app, size);
     }
+    
+    // Draw help dialog overlay if active
+    if app.show_help_dialog {
+        draw_help_dialog(f, app, size);
+    }
 }
 
 fn draw_proxy_list(f: &mut Frame, app: &App, area: Rect) {
@@ -161,22 +166,30 @@ fn draw_tabs(f: &mut Frame, app: &App, area: Rect) {
     ]
     .iter()
     .map(|&tab| {
-        let tab_name = match tab {
-            TabType::All => "All",
-            TabType::Messages => "Messages",
-            TabType::Errors => "Errors",
-            TabType::System => "System",
+        let (tab_name, emoji, fallback) = match tab {
+            TabType::All => ("All", "📊", "A"),
+            TabType::Messages => ("Messages", "💬", "M"),
+            TabType::Errors => ("Errors", "❗", "E"),
+            TabType::System => ("System", "⚡", "S"),
+        };
+        
+        // Use emoji with fallback for limited terminals
+        let tab_icon = if std::env::var("TERM").unwrap_or_default().contains("256color") 
+            || std::env::var("COLORTERM").is_ok() {
+            emoji
+        } else {
+            fallback
         };
         
         let count = app.get_tab_log_count(tab);
-        let tab_text = format!("{} ({})", tab_name, count);
+        let tab_text = format!("{} {} ({})", tab_icon, tab_name, count);
         
         if tab == app.active_tab {
             Line::from(Span::styled(
                 format!(" {} ", tab_text),
                 Style::default()
                     .fg(Color::Black)
-                    .bg(Color::White)
+                    .bg(Color::LightBlue)
                     .add_modifier(Modifier::BOLD)
             ))
         } else {
@@ -586,4 +599,187 @@ fn draw_search_dialog(f: &mut Frame, app: &App, area: Rect) {
         let cursor_y = chunks[0].y + 1; // 1 for top border
         f.set_cursor(cursor_x, cursor_y);
     }
+}
+
+fn draw_help_dialog(f: &mut Frame, app: &App, area: Rect) {
+    // Create a centered dialog for help
+    let dialog_area = centered_rect(70, 80, area);
+    
+    // Clear the background
+    let clear = Clear;
+    f.render_widget(clear, dialog_area);
+    
+    // Draw background block
+    let background = Block::default()
+        .borders(Borders::ALL)
+        .border_set(border::DOUBLE)
+        .border_style(Style::default().fg(Color::White))
+        .style(Style::default().bg(Color::Black));
+    f.render_widget(background, dialog_area);
+    
+    // Create inner area with margin
+    let inner_area = Rect {
+        x: dialog_area.x + 1,
+        y: dialog_area.y + 1,
+        width: dialog_area.width.saturating_sub(2),
+        height: dialog_area.height.saturating_sub(2),
+    };
+    
+    // Build context-aware help content
+    let mut help_sections = vec![];
+    
+    // Global shortcuts
+    help_sections.push(Line::from(Span::styled("━━━ Global Shortcuts ━━━", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))));
+    help_sections.push(Line::from(""));
+    help_sections.push(Line::from(vec![
+        Span::styled("q/Ctrl+C", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("  Quit application"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("?", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("         Show this help dialog"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("c", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("         Clear all logs"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("r", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("         Refresh proxy connections"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("/", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("         Open search dialog"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("←/→", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("       Switch focus between panels"),
+    ]));
+    help_sections.push(Line::from(""));
+    
+    // Tab navigation
+    help_sections.push(Line::from(Span::styled("━━━ Tab Navigation ━━━", Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))));
+    help_sections.push(Line::from(""));
+    help_sections.push(Line::from(vec![
+        Span::styled("Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("       Next tab"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("Shift+Tab", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw(" Previous tab"),
+    ]));
+    help_sections.push(Line::from(vec![
+        Span::styled("1-4", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+        Span::raw("       Direct tab selection (1=All, 2=Messages, 3=Errors, 4=System)"),
+    ]));
+    help_sections.push(Line::from(""));
+    
+    // Context-specific shortcuts
+    match app.focus_area {
+        FocusArea::ProxyList => {
+            help_sections.push(Line::from(Span::styled("━━━ Proxy List (Current Focus) ━━━", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from(vec![
+                Span::styled("↑/↓", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("       Navigate proxy list"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("     Filter logs by selected proxy"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("       Clear proxy filter"),
+            ]));
+        }
+        FocusArea::LogView => {
+            help_sections.push(Line::from(Span::styled("━━━ Log View (Current Focus) ━━━", Style::default().fg(Color::Green).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from(vec![
+                Span::styled("↑/↓", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("       Navigate logs"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("PgUp/PgDn", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw(" Page up/down"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("Home/End", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("  Jump to top/bottom"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("Enter", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("     View log details"),
+            ]));
+            help_sections.push(Line::from(vec![
+                Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+                Span::raw("       Return to follow mode"),
+            ]));
+        }
+    }
+    
+    help_sections.push(Line::from(""));
+    
+    // Mode-specific help
+    match app.navigation_mode {
+        NavigationMode::Follow => {
+            help_sections.push(Line::from(Span::styled("━━━ Follow Mode (Active) ━━━", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from("Automatically scrolls to show new logs as they arrive"));
+            help_sections.push(Line::from("Press ↑/↓ to enter Navigate mode"));
+        }
+        NavigationMode::Navigate => {
+            help_sections.push(Line::from(Span::styled("━━━ Navigate Mode (Active) ━━━", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from("Manual navigation through logs"));
+            help_sections.push(Line::from("Press Esc to return to Follow mode"));
+        }
+        NavigationMode::Search => {
+            help_sections.push(Line::from(Span::styled("━━━ Search Mode (Active) ━━━", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from("Type to filter logs"));
+            help_sections.push(Line::from("Enter to navigate results, Esc to exit"));
+        }
+        NavigationMode::SearchResults => {
+            help_sections.push(Line::from(Span::styled("━━━ Search Results (Active) ━━━", Style::default().fg(Color::Magenta).add_modifier(Modifier::BOLD))));
+            help_sections.push(Line::from(""));
+            help_sections.push(Line::from("Navigating filtered search results"));
+            help_sections.push(Line::from("Press / to search again, Esc to clear"));
+        }
+    }
+    
+    // Special view shortcuts
+    if app.show_detail_view {
+        help_sections.push(Line::from(""));
+        help_sections.push(Line::from(Span::styled("━━━ Detail View Shortcuts ━━━", Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD))));
+        help_sections.push(Line::from(""));
+        help_sections.push(Line::from(vec![
+            Span::styled("W", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("         Toggle word wrap"),
+        ]));
+        help_sections.push(Line::from(vec![
+            Span::styled("↑/↓", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("       Scroll content"),
+        ]));
+        help_sections.push(Line::from(vec![
+            Span::styled("Esc", Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
+            Span::raw("       Close detail view"),
+        ]));
+    }
+    
+    // Create scrollable paragraph
+    let help_paragraph = Paragraph::new(help_sections)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title(" Keyboard Shortcuts ")
+                .title(Title::from(" Press ESC or ? to close ").alignment(Alignment::Right).position(block::Position::Bottom))
+                .border_set(border::THICK)
+                .border_style(Style::default().fg(Color::Yellow).add_modifier(Modifier::BOLD))
+                .style(Style::default().bg(Color::Rgb(20, 20, 20))),
+        )
+        .style(Style::default().fg(Color::White))
+        .alignment(Alignment::Left);
+    
+    f.render_widget(help_paragraph, inner_area);
 }

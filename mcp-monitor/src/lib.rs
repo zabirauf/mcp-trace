@@ -152,7 +152,13 @@ async fn run_app<B: Backend>(
         if event::poll(timeout)? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
-                    if app.show_detail_view {
+                    if app.show_help_dialog {
+                        // Handle help dialog keyboard events
+                        match key.code {
+                            KeyCode::Esc | KeyCode::Char('?') => app.show_help_dialog = false,
+                            _ => {}
+                        }
+                    } else if app.show_detail_view {
                         // Handle detail view keyboard events
                         match key.code {
                             KeyCode::Esc => app.hide_detail_view(),
@@ -257,6 +263,7 @@ async fn run_app<B: Backend>(
                                     },
                                 }
                             },
+                            KeyCode::Char('?') => app.show_help_dialog = true,
                             _ => {}
                         }
                     }
