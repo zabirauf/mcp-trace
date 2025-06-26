@@ -1,5 +1,5 @@
 [package]
-name = "mcp-probe-e2e-tests"
+name = "mcp-trace-e2e-tests"
 version = "0.1.0"
 edition = "2021"
 

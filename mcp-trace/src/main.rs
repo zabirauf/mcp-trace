@@ -2,7 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
-#[command(name = "mcp-probe")]
+#[command(name = "mcp-trace")]
 #[command(about = "Unified MCP probing and monitoring tool")]
 #[command(version = "0.1.0")]
 pub struct Cli {

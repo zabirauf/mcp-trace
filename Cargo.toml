@@ -3,7 +3,7 @@ members = [
     "mcp-proxy",
     "mcp-monitor", 
     "mcp-common",
-    "mcp-probe",
+    "mcp-trace",
     "tests"
 ]
 resolver = "2"

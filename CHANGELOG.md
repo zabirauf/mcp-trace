@@ -34,7 +34,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Comprehensive test framework**: Multiple test modes for demonstrating MCP communication flows
 - **Demo scripts**: Interactive demonstrations of client ↔ proxy ↔ server communication
 - **Test MCP server/client**: Simple implementations for testing proxy functionality
-- **Unified CLI**: `mcp-probe` command with subcommands for different operations
+- **Unified CLI**: `mcp-trace` command with subcommands for different operations
 
 #### User Experience
 - **Keyboard navigation**: Intuitive keyboard controls with context-sensitive help
@@ -60,7 +60,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **mcp-proxy**: STDIO proxy binary with IPC communication
 - **mcp-monitor**: TUI monitoring application with ratatui
 - **mcp-common**: Shared types, IPC protocols, and utilities
-- **mcp-probe**: Unified CLI for debugging and testing
+- **mcp-trace**: Unified CLI for debugging and testing
 
 #### Dependencies
 - **Rust**: Modern Rust with tokio async runtime

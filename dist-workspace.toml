@@ -12,7 +12,7 @@ installers = ["shell"]
 # Target platforms to build apps for (Rust target-triple syntax)
 targets = ["aarch64-apple-darwin", "aarch64-unknown-linux-gnu", "x86_64-apple-darwin", "x86_64-unknown-linux-gnu"]
 # Only build binaries marked with dist = true
-precisely-dist = ["mcp-probe"]
+precisely-dist = ["mcp-trace"]
 # Skip checking whether cargo-dist should be run
 allow-dirty = ["ci"]
 
