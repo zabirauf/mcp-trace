@@ -1,10 +1,10 @@
-# MCP Probe
+# MCP Trace
 
 A powerful Terminal User Interface (TUI) for monitoring and debugging Model Context Protocol (MCP) servers in real-time. Built with Rust and designed for MCP developers who need deep visibility into their server implementations.
 
-## Why MCP Probe?
+## Why MCP Trace?
 
-Developing MCP servers can be challenging when you can't see what's happening under the hood. MCP Probe solves this by providing:
+Developing MCP servers can be challenging when you can't see what's happening under the hood. MCP Trace solves this by providing:
 
 - **Real-time monitoring** of all JSON-RPC communication between clients and servers
 - **Multiple server tracking** - monitor several MCP servers simultaneously
@@ -22,8 +22,8 @@ Perfect for:
 
 ```bash
 # Clone the repository
-git clone https://github.com/zabirauf/mcp-probe
-cd mcp-probe
+git clone https://github.com/zabirauf/mcp-trace
+cd mcp-trace
 
 # Start the monitoring interface
 ./run.sh monitor
@@ -185,8 +185,8 @@ Every JSON-RPC message is captured and displayed with:
 
 ### From Source
 ```bash
-git clone https://github.com/zabirauf/mcp-probe
-cd mcp-probe
+git clone https://github.com/zabirauf/mcp-trace
+cd mcp-trace
 cargo install --path .
 ```
 ## Configuration
@@ -238,8 +238,8 @@ We welcome contributions! This project is built with an AI-first approach where 
 
 ### Development Setup
 ```bash
-git clone https://github.com/zabirauf/mcp-probe
-cd mcp-probe
+git clone https://github.com/zabirauf/mcp-trace
+cd mcp-trace
 cargo build
 cargo test
 ```

@@ -50,13 +50,13 @@ start_proxy() {
     cd "$PROJECT_DIR"
     
     # Build if needed
-    if [ ! -f "target/release/mcp-probe" ]; then
-        echo "Building mcp-probe..."
+    if [ ! -f "target/release/mcp-trace" ]; then
+        echo "Building mcp-trace..."
         cargo build --release
     fi
     
     # Start proxy
-    ./target/release/mcp-probe proxy --command "python3 $SCRIPT_DIR/test_server.py $*" --name "TestServer"
+    ./target/release/mcp-trace proxy --command "python3 $SCRIPT_DIR/test_server.py $*" --name "TestServer"
 }
 
 start_monitor() {
@@ -64,13 +64,13 @@ start_monitor() {
     cd "$PROJECT_DIR"
     
     # Build if needed
-    if [ ! -f "target/release/mcp-probe" ]; then
-        echo "Building mcp-probe..."
+    if [ ! -f "target/release/mcp-trace" ]; then
+        echo "Building mcp-trace..."
         cargo build --release
     fi
     
     # Start monitor
-    ./target/release/mcp-probe monitor
+    ./target/release/mcp-trace monitor
 }
 
 run_full_test() {

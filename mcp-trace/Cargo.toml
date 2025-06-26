@@ -1,12 +1,12 @@
 [package]
-name = "mcp-probe"
+name = "mcp-trace"
 version = "0.1.0"
 edition = "2021"
 description = "Terminal UI for monitoring Model Context Protocol (MCP) server traffic"
 authors = ["zabirauf"]
 license = "MIT"
-homepage = "https://github.com/zabirauf/mcp-probe"
-repository = "https://github.com/zabirauf/mcp-probe"
+homepage = "https://github.com/zabirauf/mcp-trace"
+repository = "https://github.com/zabirauf/mcp-trace"
 readme = "../README.md"
 keywords = ["mcp", "debug", "monitor", "tui", "proxy"]
 categories = ["command-line-utilities", "development-tools::debugging"]

@@ -524,31 +524,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "mcp-probe"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "mcp-monitor",
- "mcp-proxy",
- "tokio",
-]
-
-[[package]]
-name = "mcp-probe-e2e-tests"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "mcp-common",
- "mcp-monitor",
- "mcp-proxy",
- "serde",
- "serde_json",
- "tempfile",
- "tokio",
-]
-
-[[package]]
 name = "mcp-proxy"
 version = "0.1.0"
 dependencies = [
@@ -566,6 +541,31 @@ dependencies = [
  "tracing",
  "tracing-subscriber",
  "uuid",
+]
+
+[[package]]
+name = "mcp-trace"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "mcp-monitor",
+ "mcp-proxy",
+ "tokio",
+]
+
+[[package]]
+name = "mcp-trace-e2e-tests"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "mcp-common",
+ "mcp-monitor",
+ "mcp-proxy",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
 ]
 
 [[package]]
