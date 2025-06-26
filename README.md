@@ -1,80 +1,111 @@
 # MCP Trace
 
-A powerful Terminal User Interface (TUI) for monitoring and debugging Model Context Protocol (MCP) servers in real-time. Built with Rust and designed for MCP developers who need deep visibility into their server implementations.
+A powerful Terminal User Interface (TUI) for monitoring and debugging Model Context Protocol (MCP) servers in real-time.
 
 ## Why MCP Trace?
 
 Developing MCP servers can be challenging when you can't see what's happening under the hood. MCP Trace solves this by providing:
 
-- **Real-time monitoring** of all JSON-RPC communication between clients and servers
-- **Multiple server tracking** - monitor several MCP servers simultaneously
-- **Request/response analysis** with detailed statistics and error tracking
-- **Zero-configuration setup** - works with any STDIO-based MCP server
-- **Beautiful TUI interface** with syntax highlighting and intuitive navigation
+### Key Features
 
-Perfect for:
-- **Learning MCP** by observing real communication flows
-- **MCP server developers** debugging their implementations
+- 🔍 **Real-time Monitoring** - Watch JSON-RPC messages as they flow between client and server
+- 📊 **Multi-Server Support** - Monitor multiple MCP servers simultaneously in one interface
+- 🎨 **Beautiful TUI** - Clean, intuitive terminal interface with emoji indicators
+- 📈 **Statistics Dashboard** - Track requests, response times, and error rates
+- 🔎 **Smart Filtering** - Filter logs by server, message type, or search content
+- ⚡ **Zero Overhead** - Minimal performance impact on your MCP servers
 
-## Quick Start
+## 🚀 Quick Start
 
-### Using Docker (Recommended)
+### Option 1: Install via Script (Recommended)
 
 ```bash
-# Clone the repository
+# macOS and Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/zabirauf/mcp-trace/releases/download/v0.1.0/mcp-trace-installer.sh | sh
+```
+
+### Option 2: Download Prebuilt Binaries
+
+Download the latest release for your platform from [GitHub Releases](https://github.com/zabirauf/mcp-trace/releases).
+
+### Option 3: Build from Source
+
+```bash
+# Requires Rust 1.70+
 git clone https://github.com/zabirauf/mcp-trace
 cd mcp-trace
-
-# Start the monitoring interface
-./run.sh monitor
-
-# In another terminal, start monitoring your MCP server
-./run.sh proxy python your_mcp_server.py
+cargo build --release
 ```
 
-### Install from Source
+## 📖 Basic Usage
+
+MCP Trace requires two components running:
+
+1. **Monitor** - The TUI interface that displays logs
+2. **Proxy** - Intercepts communication for each MCP server
+
+### Step 1: Start the Monitor
 
 ```bash
-# Build the project
-cargo build --release
-
-# Start the monitor
-./target/release/mcp-monitor
-
-# Start monitoring your server (in another terminal)
-./target/release/mcp-proxy --name "My Server" --command python your_server.py
+# Start the TUI monitor interface
+mcp-trace monitor
 ```
 
-## Usage Examples
+### Step 2: Start a Proxy for Your Server
+
+In another terminal:
+
+```bash
+# Basic usage
+mcp-trace proxy --name "My Server" --command "python my_server.py"
+```
+
+## 🔧 Configuring Your MCP Client
+
+To use MCP Trace with your MCP client, update your configuration file (usually `mcp.json` or `cline_mcp_settings.json`):
+
+```json
+{
+  "mcpServers": {
+    "my-server": {
+      "command": "./mcp-proxy",
+      "args": [
+        "--name", "My Server", 
+        "--command", "python path/to/my_server.py"
+      ]
+    }
+  }
+}
+```
+
+The proxy will transparently forward all communication while logging to the monitor.
+
+## 📚 Common Usage Examples
 
 ### Python MCP Server
 
 ```bash
-# Monitor a Python MCP server
-./run.sh proxy python -m my_mcp_package.server
+# Simple Python server
+mcp-trace proxy --name "Python Server" --command "python server.py"
+
+# With virtual environment
+mcp-trace proxy --name "Python Server" --command "venv/bin/python server.py"
 
 # With arguments
-./run.sh proxy python server.py --config config.json --port 8080
+mcp-trace proxy --name "Python Server" --command "python server.py --port 3000"
 ```
 
 ### Node.js MCP Server
 
 ```bash
-# Monitor a Node.js MCP server
-./run.sh proxy node dist/server.js
+# Node.js server
+mcp-trace proxy --name "Node Server" --command "node server.js"
 
-# With npm script
-./run.sh proxy npm run start:mcp
-```
+# Using npx
+mcp-trace proxy --name "Node Server" --command "npx @modelcontextprotocol/server-filesystem /path"
 
-### Binary MCP Server
-
-```bash
-# Monitor a compiled binary server
-./run.sh proxy ./my-mcp-server --verbose
-
-# With custom configuration
-./run.sh proxy ./server --config /path/to/config.toml
+# Using npm script
+mcp-trace proxy --name "Node Server" --command "npm run start:mcp"
 ```
 
 ### Multiple Servers
@@ -83,160 +114,61 @@ Monitor multiple MCP servers simultaneously:
 
 ```bash
 # Terminal 1: Start monitor
-./run.sh monitor
+mcp-trace monitor
 
-# Terminal 2: Start first server
-./run.sh proxy python server1.py
+# Terminal 2: Python server
+mcp-trace proxy --name "Python API" --command "python api_server.py"
 
-# Terminal 3: Start second server  
-./run.sh proxy node server2.js
+# Terminal 3: Node.js server  
+mcp-trace proxy --name "File System" --command "node fs_server.js"
 
-# Terminal 4: Start third server
-./run.sh proxy ./binary-server --config prod.json
+# Terminal 4: Another server
+mcp-trace proxy --name "Database" --command "./db_server"
 ```
 
-## TUI Interface
-
-### Main View
-- **Left Panel**: List of connected servers with status indicators
-- **Right Panel**: Real-time log viewer with JSON syntax highlighting
-- **Bottom Panel**: Statistics dashboard and help text
+## 🎮 Keyboard Controls
 
 ### Navigation
-- `q` - Quit the application
+- `←/→` - Switch focus between panels
+- `↑/↓` - Navigate logs or proxy list
+- `Tab/Shift+Tab` - Switch between log filter tabs
+- `Enter` - View log details or filter by proxy
+- `Esc` - Exit detail view / clear filters
+
+### Actions
+- `?` - Show context-aware help
+- `/` - Search logs
 - `c` - Clear all logs
 - `r` - Refresh connections
-- `↑/↓` - Scroll through logs
+- `q` - Quit application
+
+### Scrolling
 - `PgUp/PgDn` - Page up/down
 - `Home/End` - Jump to top/bottom
-- `Tab` - Switch between panels
 
-### Status Indicators
-- 🟢 **Connected** - Server is running and responding
-- 🟡 **Starting** - Server is initializing
-- 🔴 **Error** - Server encountered an error
-- ⚫ **Disconnected** - Server is not responding
+## 🐛 Troubleshooting
 
-## Command Reference
+### Monitor shows "No connections"
+- Ensure the monitor is running before starting proxies
+- Check that both use the same socket path (default: `/tmp/mcp-monitor.sock`)
+- Verify the proxy command includes `--name` and `--command` flags
 
-### mcp-probe monitor
+### Server fails to start
+- Test your server command directly first: `python my_server.py`
+- Ensure your server uses STDIO for MCP communication
+- Check proxy logs with `--verbose` flag
 
-Start the monitoring TUI interface.
-
-```bash
-mcp-probe monitor [OPTIONS]
-
-Options:
-  -v, --verbose                 Enable verbose logging
-  -s, --socket <PATH>          Custom IPC socket path
-  -h, --help                   Show help information
-```
-
-### mcp-probe proxy
-
-Start monitoring an MCP server.
-
-```bash
-mcp-probe proxy [OPTIONS] <COMMAND>
-
-Arguments:
-  <COMMAND>                    Command to start your MCP server
-
-Options:
-  -n, --name <NAME>           Display name for this server
-  -s, --socket <PATH>         IPC socket path to connect to monitor
-  -v, --verbose               Enable verbose logging
-  -h, --help                  Show help information
-
-Examples:
-  mcp-probe proxy python server.py
-  mcp-probe proxy --name "File Server" node dist/file-server.js
-  mcp-probe proxy --verbose ./my-binary-server --config config.json
-```
-
-## What You'll See
-
-### Request/Response Logging
-Every JSON-RPC message is captured and displayed with:
-- Timestamp and direction (→ outgoing, ← incoming)
-- Method names and IDs for easy tracking
-- Full JSON payloads with syntax highlighting
-- Error messages and stack traces
-
-### Statistics Dashboard
-- **Total Requests** - Number of requests processed
-- **Success Rate** - Percentage of successful requests
-- **Average Response Time** - Performance metrics
-- **Data Transfer** - Bytes sent/received
-- **Active Connections** - Current client connections
-
-### Error Tracking
-- Real-time error highlighting
-- Stack trace preservation
-- Error categorization (client vs server errors)
-- Request/response correlation for debugging
-
-## Installation
-
-### Prerequisites
-- Rust 1.70+ (if building from source)
-- Docker (for containerized usage)
-- Your MCP server implementation
-
-### From Source
-```bash
-git clone https://github.com/zabirauf/mcp-trace
-cd mcp-trace
-cargo install --path .
-```
-## Configuration
-
-### Environment Variables
-- `RUST_LOG` - Set logging level (debug, info, warn, error)
-- `MCP_SOCKET_PATH` - Custom IPC socket location
-- `TERM` - Terminal type (recommended: xterm-256color)
-
-### Socket Configuration
-By default, MCP Probe uses Unix domain sockets at `/tmp/mcp-monitor.sock`. You can customize this:
-
-```bash
-# Custom socket path
-mcp-probe monitor --socket /custom/path/monitor.sock
-mcp-probe proxy --socket /custom/path/monitor.sock python server.py
-```
-
-## Troubleshooting
-
-### Common Issues
-
-**Monitor shows no connections**
-- Ensure both monitor and proxy use the same socket path
-- Check that the socket directory is writable
-- Verify the proxy command is correct
-
-**Server fails to start**
-- Verify your MCP server command works independently
-- Check that the server supports STDIO mode
-- Review proxy logs with `--verbose` flag
-
-**TUI display problems**
-- Set `TERM=xterm-256color`
-- Ensure terminal supports 256 colors
-- Try resizing the terminal window
-
-### Debug Mode
-Enable verbose logging to see detailed information:
-
-```bash
-RUST_LOG=debug mcp-probe monitor --verbose
-RUST_LOG=debug mcp-probe proxy --verbose python server.py
-```
+### Display issues
+- Set your terminal to support 256 colors: `export TERM=xterm-256color`
+- Ensure your terminal window is at least 80x24 characters
+- Try a different terminal emulator if issues persist
 
 ## Contributing
 
-We welcome contributions! This project is built with an AI-first approach where Claude and other AI assistants are primary development partners.
+We welcome contributions! This project uses an AI-first development approach where Claude and other AI assistants are primary development partners.
 
 ### Development Setup
+
 ```bash
 git clone https://github.com/zabirauf/mcp-trace
 cd mcp-trace
@@ -244,23 +176,19 @@ cargo build
 cargo test
 ```
 
-### Architecture
-MCP Probe consists of two main components that communicate via IPC:
-- **mcp-probe monitor** - The TUI interface
-- **mcp-probe proxy** - The transparent proxy that intercepts MCP traffic
+### Project Structure
 
-## AI-First Development
+- `mcp-monitor/` - TUI application
+- `mcp-proxy/` - Proxy server implementation  
+- `mcp-common/` - Shared types and IPC protocol
+- `mcp-trace/` - Unified CLI binary
 
-This project embraces AI-assisted development as a core philosophy. We believe that:
-
-- **AI partnerships accelerate development** - Claude and other AI assistants are treated as primary development partners, not just tools
-- **Human creativity + AI efficiency** - Combining human insight with AI's rapid iteration capabilities produces better software faster
-- **Documentation-driven development** - Comprehensive documentation (like CLAUDE.md) enables AI assistants to understand and contribute meaningfully to the codebase
-
-The codebase includes detailed AI-guidance documentation and is structured to be easily understood and extended by AI assistants. We encourage contributors to embrace this collaborative approach and document their code in ways that facilitate AI understanding and contribution.
-
-Future development will continue to leverage AI partnerships for feature development, testing, documentation, and optimization. We see this as the future of open-source development and invite the community to explore and contribute to this paradigm.
-
-## License
+## 📝 License
 
 MIT License - see LICENSE file for details.
+
+## 🔗 Links
+
+- [GitHub Repository](https://github.com/zabirauf/mcp-trace)
+- [Issue Tracker](https://github.com/zabirauf/mcp-trace/issues)
+- [Releases](https://github.com/zabirauf/mcp-trace/releases)
