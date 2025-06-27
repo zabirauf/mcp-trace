@@ -1,7 +1,6 @@
 # CLAUDE.md
 
 This file provides guidance to Claude Code when working with the MCP Proxy TUI project.
-
 ## Project Overview
 
 This is a Terminal User Interface (TUI) application built with **Rust and Ratatui** that acts as a proxy and monitor for Model Context Protocol (MCP) server traffic. It consists of two separate binaries that work together to intercept, log, and display all communication between MCP clients and servers in real-time.
@@ -32,6 +31,27 @@ MCP Client → [mcp-proxy] → MCP Server (STDIO)
            [mcp-monitor TUI]
                  ↓
            [Log Storage]
+```
+
+## Repository Information
+
+**GitHub Repository**: `zabirauf/mcp-trace`
+
+## Binary Distribution
+
+When setting up binary distribution, **only the `mcp-trace` binary should be distributed**. The other binaries (`mcp-monitor` and `mcp-proxy`) are for internal use only and should not be included in public distributions.
+
+## Commit Message Style
+
+Keep git commit messages concise and direct. Avoid verbose explanations.
+
+## Branch Management
+
+For new tasks unrelated to the current work, always create a new branch from `main`:
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/new-task-name
 ```
 
 ## Key Components
