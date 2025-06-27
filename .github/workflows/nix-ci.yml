@@ -1,0 +1,43 @@
+name: Nix CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      
+      - uses: cachix/install-nix-action@v25
+        with:
+          extra_nix_config: |
+            access-tokens = github.com=${{ secrets.GITHUB_TOKEN }}
+            experimental-features = nix-command flakes
+      
+      - name: Check flake
+        run: nix flake check
+      
+      - name: Build default package
+        run: nix build
+      
+      - name: Run tests
+        run: nix develop --command cargo test
+      
+      - name: Check formatting
+        run: nix develop --command cargo fmt -- --check
+      
+      - name: Run clippy
+        run: nix develop --command cargo clippy -- -D warnings
+      
+      - name: Test binary execution
+        run: |
+          nix run . -- --help
+          nix run . -- monitor --help
+          nix run . -- proxy --help
