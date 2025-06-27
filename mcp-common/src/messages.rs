@@ -1,5 +1,5 @@
+use crate::{LogEntry, ProxyId, ProxyInfo, ProxyStats};
 use serde::{Deserialize, Serialize};
-use crate::{LogEntry, ProxyInfo, ProxyStats, ProxyId};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum IpcMessage {
@@ -8,18 +8,24 @@ pub enum IpcMessage {
     ProxyStopped(ProxyId),
     LogEntry(LogEntry),
     StatsUpdate(ProxyStats),
-    
+
     // Monitor -> Proxy messages
     GetStatus(ProxyId),
-    GetLogs { proxy_id: ProxyId, limit: Option<usize> },
+    GetLogs {
+        proxy_id: ProxyId,
+        limit: Option<usize>,
+    },
     Shutdown(ProxyId),
-    
+
     // Bidirectional messages
     Ping,
     Pong,
-    
+
     // Error handling
-    Error { message: String, proxy_id: Option<ProxyId> },
+    Error {
+        message: String,
+        proxy_id: Option<ProxyId>,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

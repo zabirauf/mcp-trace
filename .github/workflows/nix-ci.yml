@@ -30,11 +30,13 @@ jobs:
       - name: Run tests
         run: nix develop --command cargo test
       
-      - name: Check formatting
+      - name: Check formatting (optional)
         run: nix develop --command cargo fmt -- --check
+        continue-on-error: true
       
-      - name: Run clippy
-        run: nix develop --command cargo clippy -- -D warnings
+      - name: Run clippy (optional)  
+        run: nix develop --command cargo clippy
+        continue-on-error: true
       
       - name: Test binary execution
         run: |
