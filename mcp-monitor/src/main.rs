@@ -9,7 +9,7 @@ pub struct Args {
     /// IPC socket path for proxy communication
     #[arg(short, long, default_value = "/tmp/mcp-monitor.sock")]
     pub ipc_socket: String,
-    
+
     /// Verbose logging
     #[arg(short, long)]
     pub verbose: bool,
@@ -18,11 +18,11 @@ pub struct Args {
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
-    
+
     let monitor_args = MonitorArgs {
         ipc_socket: args.ipc_socket,
         verbose: args.verbose,
     };
-    
+
     run_monitor_app(monitor_args).await
 }

@@ -23,7 +23,7 @@ impl StdioHandler {
         ipc_client: Option<Arc<BufferedIpcClient>>,
     ) -> Result<Self> {
         let stats_interval = interval(Duration::from_secs(1));
-        
+
         Ok(Self {
             proxy_id,
             stats,
@@ -37,9 +37,18 @@ impl StdioHandler {
         child: &mut Child,
         mut shutdown_rx: broadcast::Receiver<()>,
     ) -> Result<()> {
-        let stdin = child.stdin.take().ok_or_else(|| anyhow::anyhow!("Failed to get child stdin"))?;
-        let stdout = child.stdout.take().ok_or_else(|| anyhow::anyhow!("Failed to get child stdout"))?;
-        let stderr = child.stderr.take().ok_or_else(|| anyhow::anyhow!("Failed to get child stderr"))?;
+        let stdin = child
+            .stdin
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get child stdin"))?;
+        let stdout = child
+            .stdout
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get child stdout"))?;
+        let stderr = child
+            .stderr
+            .take()
+            .ok_or_else(|| anyhow::anyhow!("Failed to get child stderr"))?;
 
         let mut child_stdin = BufWriter::new(stdin);
         let mut child_stdout = BufReader::new(stdout);
@@ -78,7 +87,7 @@ impl StdioHandler {
                         Ok((0, _)) => break, // EOF
                         Ok((_, input)) => {
                             self.log_request(&input).await;
-                            
+
                             if let Err(e) = child_stdin.write_all(input.as_bytes()).await {
                                 error!("Failed to write to child stdin: {}", e);
                                 break;
@@ -87,7 +96,7 @@ impl StdioHandler {
                                 error!("Failed to flush child stdin: {}", e);
                                 break;
                             }
-                            
+
                             // Update stats
                             {
                                 let mut stats = self.stats.lock().await;
@@ -115,7 +124,7 @@ impl StdioHandler {
                         }
                         Ok((_, output)) => {
                             self.log_response(&output).await;
-                            
+
                             if let Err(e) = user_stdout.write_all(output.as_bytes()).await {
                                 error!("Failed to write to user stdout: {}", e);
                                 break;
@@ -124,7 +133,7 @@ impl StdioHandler {
                                 error!("Failed to flush user stdout: {}", e);
                                 break;
                             }
-                            
+
                             // Update stats
                             {
                                 let mut stats = self.stats.lock().await;
@@ -155,7 +164,7 @@ impl StdioHandler {
                         }
                         Ok((_, error_msg)) => {
                             self.log_error(&error_msg).await;
-                            
+
                             // Also forward stderr to user stderr
                             if let Err(e) = tokio::io::stderr().write_all(error_msg.as_bytes()).await {
                                 warn!("Failed to write child stderr to user stderr: {}", e);
@@ -236,5 +245,4 @@ impl StdioHandler {
 
         error!("Child stderr: {}", content.trim());
     }
-
 }

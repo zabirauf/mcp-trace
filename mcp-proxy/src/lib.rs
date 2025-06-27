@@ -2,9 +2,9 @@ use anyhow::Result;
 use mcp_common::ProxyId;
 use tracing::info;
 
+mod buffered_ipc_client;
 mod proxy;
 mod stdio_handler;
-mod buffered_ipc_client;
 
 use proxy::MCPProxy;
 
@@ -30,18 +30,30 @@ pub async fn run_proxy_app(args: ProxyArgs) -> Result<()> {
 
     info!("Starting MCP Proxy: {}", args.name);
     info!("Target command: {}", args.command);
-    
+
     if args.command.is_empty() {
-        return Err(anyhow::anyhow!("No command specified. Use --command to specify the MCP server command."));
+        return Err(anyhow::anyhow!(
+            "No command specified. Use --command to specify the MCP server command."
+        ));
     }
 
     // Create proxy instance
     let proxy_id = ProxyId::new();
-    let mut proxy = MCPProxy::new(proxy_id.clone(), args.name.clone(), args.command.clone(), args.shell).await?;
-    
+    let mut proxy = MCPProxy::new(
+        proxy_id.clone(),
+        args.name.clone(),
+        args.command.clone(),
+        args.shell,
+    )
+    .await?;
+
     // Start the proxy
-    let ipc_socket = if args.no_monitor { None } else { Some(args.ipc_socket.as_str()) };
+    let ipc_socket = if args.no_monitor {
+        None
+    } else {
+        Some(args.ipc_socket.as_str())
+    };
     proxy.start(ipc_socket).await?;
-    
+
     Ok(())
 }
