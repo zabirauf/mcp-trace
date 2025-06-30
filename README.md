@@ -2,6 +2,8 @@
 
 A powerful Terminal User Interface (TUI) for monitoring and debugging Model Context Protocol (MCP) servers in real-time.
 
+![MCP Trace TUI](docs/mcp-trace-tui.png)
+
 ## Why MCP Trace?
 
 Developing MCP servers can be challenging when you can't see what's happening under the hood. MCP Trace solves this by providing:
